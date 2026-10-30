@@ -30,60 +30,27 @@
       <div class="dashboard-heading">
         <div>
           <div class="section-kicker">Server overview</div>
-          <h1 data-i18n="dashboard">Operations dashboard</h1>
-          <p class="section-lead" data-i18n="monitor">Monitor system health and manage your Docker services.</p>
+          <h1 data-i18n="dashboard">AI infrastructure dashboard</h1>
+          <p class="section-lead" data-i18n="monitor">Monitor host health and manage the runtime behind your AI engines.</p>
         </div>
         <button id="refresh-button" class="button button-secondary" type="button" data-i18n="refresh">Refresh data</button>
       </div>
 
       <div id="dashboard-error" class="error-banner" role="alert" hidden></div>
       <div class="dashboard-view" data-dashboard-view="marketplace" hidden>
-        <section class="panel launcher-panel" aria-labelledby="launcher-title">
-        <div class="panel-header">
-          <div>
-            <h2 id="launcher-title" data-i18n="launcher">Services &amp; AI Launcher</h2>
-            <p data-i18n="launcherHelp">Deploy trusted self-hosted services directly to this server.</p>
-          </div>
-          <button id="launcher-toggle" class="button button-secondary" type="button" aria-expanded="true" data-i18n="collapse">Collapse</button>
-        </div>
-        <div id="launcher-content" class="launcher-content">
-          <div class="launcher-grid">
-            <article class="launcher-card" data-i18n-title="portainerTip" title="Portainer provides a web interface for managing Docker containers.">
-              <div><h3>Portainer</h3><p data-i18n="portainer">Docker management UI</p><p class="service-state" data-service-state>Not installed</p></div>
-              <div class="service-actions" data-service-actions></div>
-              <button class="button button-small button-secondary" data-service="portainer" type="button" data-i18n="deploy">Deploy</button>
-            </article>
-            <article class="launcher-card" data-i18n-title="nginxTip" title="Nginx Proxy Manager handles reverse proxy routes and SSL certificates.">
-              <div><h3>Nginx Proxy Manager</h3><p data-i18n="nginx">Reverse proxy and SSL</p><p class="service-state" data-service-state>Not installed</p></div>
-              <div class="service-actions" data-service-actions></div>
-              <button class="button button-small button-secondary" data-service="nginx-proxy-manager" type="button" data-i18n="deploy">Deploy</button>
-            </article>
-            <article class="launcher-card" data-i18n-title="nextcloudTip" title="Nextcloud provides private file storage and collaboration.">
-              <div><h3>Nextcloud</h3><p data-i18n="nextcloud">Private files and collaboration</p><p class="service-state" data-service-state>Not installed</p></div>
-              <div class="service-actions" data-service-actions></div>
-              <button class="button button-small button-secondary" data-service="nextcloud" type="button" data-i18n="deploy">Deploy</button>
-            </article>
-            <article class="launcher-card" data-i18n-title="uptimeTip" title="Uptime Kuma monitors service availability and incidents.">
-              <div><h3>Uptime Kuma</h3><p data-i18n="uptime">Service availability monitoring</p><p class="service-state" data-service-state>Not installed</p></div>
-              <div class="service-actions" data-service-actions></div>
-              <button class="button button-small button-secondary" data-service="uptime-kuma" type="button" data-i18n="deploy">Deploy</button>
-            </article>
-          </div>
-          <div class="ai-launcher">
-            <div class="ai-launcher-heading"><div><h3 data-i18n="ai">AI Engine</h3><p data-i18n="aiHelp">Select a model based on this server's available resources.</p></div><span id="hardware-status" class="status-badge status-badge--neutral" data-i18n="checking">Checking hardware</span></div>
-            <div class="ai-controls">
-              <label class="form-field" for="model-select"><span class="sr-only">AI model</span><select id="model-select" class="launcher-select"><option value="llama3:8b" data-ram="8" data-vram="0">Llama 3 8B</option><option value="deepseek-r1:7b" data-ram="8" data-vram="0">DeepSeek 7B</option><option value="phi3:mini" data-ram="4" data-vram="0">Phi-3</option></select></label>
-              <div class="ai-actions"><button id="deploy-model" class="button button-primary" type="button" disabled data-i18n="deployModel">Deploy model</button><button id="start-chat" class="button button-secondary" type="button" disabled>Start Chat</button></div>
-            </div>
-            <p id="model-warning" class="field-error" role="alert" hidden></p><p id="model-status" class="service-state">Checking installed models...</p>
-            <section id="chat-panel" class="chat-panel" hidden aria-labelledby="chat-title">
-              <div class="chat-header"><h3 id="chat-title">Chat with installed model</h3><span id="chat-memory" class="status-badge status-badge--neutral">Idle</span></div>
-              <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
-              <form id="chat-form" class="chat-form"><input id="chat-prompt" type="text" placeholder="Ask your model..." autocomplete="off" required /><button id="chat-send" class="button button-primary" type="submit">Send</button></form>
-            </section>
-          </div>
-          <div id="deployment-log" class="deployment-log" role="log" aria-live="polite" hidden></div>
-        </div>
+        <section class="marketplace-hero">
+          <div><div class="section-kicker">AI engine marketplace</div><h1>Deploy intelligence for your infrastructure</h1><p class="section-lead">Explore models from edge-ready assistants to multi-GPU agentic systems. Every card includes sizing guidance for quantized and full-precision inference.</p></div>
+          <div class="marketplace-summary"><strong id="catalogue-count">Loading catalogue...</strong><span>models in the library</span><span id="installed-count">Checking Ollama...</span></div>
+        </section>
+        <section class="panel marketplace-panel" aria-labelledby="catalogue-title">
+          <div class="panel-header"><div><h2 id="catalogue-title">AI model library</h2><p>Ollama-compatible engines, grouped by deployment profile.</p></div><div class="catalogue-tools"><input id="model-search" type="search" placeholder="Search models, capabilities..." aria-label="Search model catalogue"><select id="model-category" aria-label="Filter by deployment profile"><option value="all">All profiles</option></select></div></div>
+          <div id="model-catalogue" class="model-catalogue" aria-live="polite"><p class="catalogue-loading">Loading model definitions...</p></div>
+        </section>
+        <div id="deployment-log" class="deployment-log" role="log" aria-live="polite" hidden></div>
+        <section id="chat-panel" class="chat-panel" hidden aria-labelledby="chat-title">
+          <div class="chat-header"><h3 id="chat-title">Chat with installed model</h3><span id="chat-memory" class="status-badge status-badge--neutral">Idle</span></div>
+          <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
+          <form id="chat-form" class="chat-form"><label class="sr-only" for="chat-prompt">Message</label><input id="chat-prompt" type="text" placeholder="Ask your model..." autocomplete="off" required><button id="chat-send" class="button button-primary" type="submit">Send</button></form>
         </section>
       </div>
       <div class="dashboard-view is-active" data-dashboard-view="overview">
@@ -117,8 +84,8 @@
       <section class="panel" aria-labelledby="containers-title">
         <div class="panel-header">
           <div>
-            <h2 id="containers-title"><span data-i18n="containers">Active containers</span><span class="info-tooltip" data-i18n-title="dockerTip" title="Containers isolate applications and dependencies.">i</span></h2>
-            <p>Docker services currently deployed on this server.</p>
+           <h2 id="containers-title"><span data-i18n="containers">AI infrastructure containers</span><span class="info-tooltip" data-i18n-title="dockerTip" title="Containers isolate AI runtimes and data services.">i</span></h2>
+           <p>Ollama, vector database and LLM backend containers on this server.</p>
           </div>
           <span id="last-updated" class="updated-label">Updated just now</span>
         </div>
@@ -129,7 +96,7 @@
         <div class="table-wrap">
           <table class="container-table">
             <thead>
-              <tr><th scope="col">Service</th><th scope="col">Ports</th><th scope="col">Status</th><th scope="col">Last action</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
+              <tr><th scope="col">Runtime</th><th scope="col">Ports</th><th scope="col">Status</th><th scope="col">Last action</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
             </thead>
             <tbody id="container-table-body"></tbody>
           </table>

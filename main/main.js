@@ -424,6 +424,7 @@ const getHardware = async () => {
 const deploymentName = (value) => typeof value === "string" && /^[a-z0-9][a-z0-9_.-]{0,62}$/.test(value);
 const deploymentImage = (value) => typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9_.\/:@-]{0,254}$/.test(value);
 const deploymentModel = (value) => typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9_.\/:@-]{0,127}$/.test(value);
+const aiInfrastructureImage = (value) => typeof value === "string" && /^(ollama\/|qdrant\/|chromadb\/|milvusdb\/|vllm\/|ghcr\.io\/.*(ollama|llm|vector)|nvidia\/).*$/i.test(value);
 const shellQuote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
 
 const buildDeployment = (configuration) => {
@@ -435,8 +436,8 @@ const buildDeployment = (configuration) => {
       requiresSudo: true
     };
   }
-  if (configuration.type !== "container" || !deploymentImage(configuration.image)) {
-    throw new Error("A valid container image is required.");
+  if (configuration.type !== "container" || !deploymentImage(configuration.image) || !aiInfrastructureImage(configuration.image)) {
+    throw new Error("Only AI infrastructure container images are permitted.");
   }
   const args = ["docker", "run", "--detach"];
   if (configuration.name !== undefined) {
@@ -549,6 +550,13 @@ ipcMain.handle("ssh:deploy-service", async (event, configuration) => {
   }
   startDeployment(event.sender, command, jobId, sudoPassword || "").catch((error) => {
     if (!event.sender.isDestroyed()) event.sender.send("ssh:deployment-log", { jobId, type: "error", data: error.message });
+  });
+
+  ipcMain.handle("ssh:remove-model", async (_event, model) => {
+    if (!deploymentModel(model)) throw new Error("Invalid AI model name.");
+    await executeRemote(`ollama rm ${shellQuote(model)}`, { timeoutMs: 120000 });
+    remoteStatusCache.expiresAt = 0;
+    return { model, removed: true };
   });
   return { jobId, started: true };
 });
