@@ -9,6 +9,7 @@ let mainWindow;
 let sshClient = null;
 let sshConnection = null;
 const sshManager = new SshManager(() => sshClient);
+let remoteStatusCache = { expiresAt: 0, value: null, pending: null };
 let environmentStatus = {
   initialized: false,
   ok: false,
@@ -37,6 +38,7 @@ const closeSshConnection = () => {
   }
   sshConnection = null;
   sshManager.clearSession();
+  remoteStatusCache = { expiresAt: 0, value: null, pending: null };
 };
 
 const executeRemoteResult = (command, options = {}) => sshManager.execute(command, {
@@ -252,6 +254,71 @@ const parseContainers = (output) => output
   })
   : [];
 
+const parseDockerJson = (output) => output
+  .split(/\r?\n/)
+  .filter(Boolean)
+  .map((line) => {
+    try {
+      const container = JSON.parse(line);
+      return {
+        id: container.ID || container.Id || "",
+        name: container.Names || container.Name || "",
+        image: container.Image || "",
+        status: container.Status || "",
+        state: String(container.State || "").toLowerCase(),
+        ports: container.Ports || ""
+      };
+    } catch (error) {
+      return null;
+    }
+  })
+  .filter((container) => container && container.name);
+
+const parseOllamaModels = (output) => {
+  try {
+    const data = JSON.parse(output || "{\"models\":[]}");
+    return Array.isArray(data.models)
+      ? data.models.map((model) => ({
+        name: model.name || model.model || "",
+        size: Number(model.size || 0),
+        modifiedAt: model.modified_at || null
+      })).filter((model) => model.name)
+      : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const getRemoteStatus = async () => {
+  if (remoteStatusCache.value && remoteStatusCache.expiresAt > Date.now()) return remoteStatusCache.value;
+  if (remoteStatusCache.pending) return remoteStatusCache.pending;
+  remoteStatusCache.pending = executeRemoteResult(
+    "printf '__DOCKER__\\n'; if command -v docker >/dev/null 2>&1; then docker ps -a --format '{{json .}}'; else printf '__DOCKER_MISSING__\\n'; fi; printf '\\n__OLLAMA__\\n'; if command -v curl >/dev/null 2>&1; then curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags 2>/dev/null || printf '{\"models\":[]}\\n'; else printf '{\"models\":[]}\\n'; fi",
+    { timeoutMs: 15000 }
+  ).then((result) => {
+    const sections = result.stdout.split(/__(DOCKER|OLLAMA)__\r?\n/);
+    const section = (name) => {
+      const index = sections.indexOf(name);
+      return index >= 0 ? (sections[index + 1] || "").trim() : "";
+    };
+    const dockerOutput = section("DOCKER");
+    const value = {
+      docker: {
+        dockerAvailable: !dockerOutput.includes("__DOCKER_MISSING__"),
+        containers: parseDockerJson(dockerOutput),
+        error: dockerOutput.includes("__DOCKER_MISSING__") ? "Docker not installed" : null
+      },
+      ollama: { models: parseOllamaModels(section("OLLAMA")) }
+    };
+    remoteStatusCache = { expiresAt: Date.now() + 2500, value, pending: null };
+    return value;
+  }).catch((error) => {
+    remoteStatusCache.pending = null;
+    throw error;
+  });
+  return remoteStatusCache.pending;
+};
+
 const parseCpuUsage = (output) => {
   const [totalBefore, idleBefore, totalAfter, idleAfter] = output.split(/\s+/).map(Number);
   const totalDelta = totalAfter - totalBefore;
@@ -268,9 +335,14 @@ const parseNetworkRate = (output) => {
 
 const getTelemetry = async () => {
   if (!sshClient) throw new Error("No SSH connection is active.");
-  const telemetryCommand = "printf '__TEMP__\\n'; if command -v vcgencmd >/dev/null 2>&1; then vcgencmd measure_temp; else for f in /sys/class/thermal/thermal_zone*/temp; do [ -r \"$f\" ] && awk '{ printf \"%.1f C\\n\", $1 / 1000 }' \"$f\" && break; done; fi; printf '__CPU__\\n'; read_cpu() { awk '/^cpu / { print $2+$3+$4+$5+$6+$7+$8, $5+$6 }' /proc/stat; }; before=$(read_cpu); sleep 0.1; after=$(read_cpu); printf '%s %s\\n' $before $after; printf '__MEM__\\n'; free -m; printf '__NET__\\n'; read_net() { awk 'NR > 2 && /:/ { gsub(\":\", \"\", $1); total += $2 + $10 } END { print total + 0 }' /proc/net/dev; }; before=$(read_net); sleep 0.1; after=$(read_net); printf '%s %s\\n' $before $after; printf '__DOCKER__\\n'; if command -v docker >/dev/null 2>&1; then docker ps --format '{{.Names}}|{{.Status}}|{{.Ports}}'; else printf '__DOCKER_MISSING__\\n'; fi";
+  const telemetryCommand = "printf '__TEMP__\\n'; if command -v vcgencmd >/dev/null 2>&1; then vcgencmd measure_temp; else for f in /sys/class/thermal/thermal_zone*/temp; do [ -r \"$f\" ] && awk '{ printf \"%.1f C\\n\", $1 / 1000 }' \"$f\" && break; done; fi; printf '__CPU__\\n'; read_cpu() { awk '/^cpu / { print $2+$3+$4+$5+$6+$7+$8, $5+$6 }' /proc/stat; }; before=$(read_cpu); sleep 0.1; after=$(read_cpu); printf '%s %s\\n' $before $after; printf '__MEM__\\n'; free -m; printf '__NET__\\n'; read_net() { awk 'NR > 2 && /:/ { gsub(\":\", \"\", $1); total += $2 + $10 } END { print total + 0 }' /proc/net/dev; }; before=$(read_net); sleep 0.1; after=$(read_net); printf '%s %s\\n' $before $after";
   const result = await executeRemoteResult(telemetryCommand, { timeoutMs: 10000 });
-  const sections = result.stdout.split(/__(TEMP|CPU|MEM|NET|DOCKER)__\r?\n/);
+  const remoteStatus = remoteStatusCache.value || {
+    docker: { dockerAvailable: false, containers: [], error: "Docker status is synchronizing." },
+    ollama: { models: [] }
+  };
+  void getRemoteStatus().catch((error) => console.warn("Remote service status sync failed:", error.message));
+  const sections = result.stdout.split(/__(TEMP|CPU|MEM|NET)__\r?\n/);
   const section = (name) => {
     const index = sections.indexOf(name);
     return index >= 0 ? (sections[index + 1] || "").trim() : "";
@@ -279,8 +351,6 @@ const getTelemetry = async () => {
   const cpuOutput = section("CPU");
   const memoryOutput = section("MEM");
   const networkOutput = section("NET");
-  const dockerOutput = section("DOCKER");
-  const dockerAvailable = !dockerOutput.includes("__DOCKER_MISSING__");
   const memoryResult = memoryOutput ? { status: "fulfilled", value: memoryOutput } : { status: "rejected" };
   const temperatureResult = temperatureOutput ? { status: "fulfilled", value: temperatureOutput } : { status: "rejected" };
   const cpuResult = cpuOutput ? { status: "fulfilled", value: cpuOutput } : { status: "rejected" };
@@ -293,18 +363,6 @@ const getTelemetry = async () => {
       console.warn("Unable to parse remote memory output:", error);
     }
   }
-  const dockerStatus = dockerAvailable
-    ? {
-      dockerAvailable: true,
-      containers: parseContainers(dockerOutput),
-      error: null
-    }
-    : {
-      dockerAvailable: false,
-      containers: [],
-      error: "Docker not installed"
-    };
-
   return {
     timestamp: new Date().toISOString(),
     cpuTemperatureC: temperatureResult.status === "fulfilled" ? parseTemperature(temperatureOutput) : null,
@@ -313,9 +371,10 @@ const getTelemetry = async () => {
     networkBytesPerSecond: networkResult.status === "fulfilled" ? parseNetworkRate(networkOutput) : null,
     memory,
     memoryError: memory ? null : "RAM usage unavailable",
-    docker: dockerStatus,
-    containers: dockerStatus.containers,
-    dockerAvailable: dockerStatus.dockerAvailable,
+    docker: remoteStatus.docker,
+    containers: remoteStatus.docker.containers,
+    dockerAvailable: remoteStatus.docker.dockerAvailable,
+    ollama: remoteStatus.ollama,
     environment: environmentStatus
   };
 };
@@ -443,6 +502,41 @@ ipcMain.handle("ssh:get-telemetry", async () => {
 
 ipcMain.handle("ssh:check-hardware", async () => getHardware());
 ipcMain.handle("ssh:initialize-environment", async () => initializeEnvironment());
+ipcMain.handle("ssh:chat", async (event, request) => {
+  if (!request || !deploymentModel(request.model) || typeof request.prompt !== "string" || !request.prompt.trim()) {
+    throw new Error("A valid installed model and prompt are required.");
+  }
+  const body = JSON.stringify({ model: request.model, prompt: request.prompt, stream: true });
+  let buffer = "";
+  const send = (payload) => {
+    if (!event.sender.isDestroyed()) event.sender.send("ssh:chat-chunk", payload);
+  };
+  const result = await executeRemoteResult(
+    `curl -fsS -N --max-time 1800 http://127.0.0.1:11434/api/generate -H 'Content-Type: application/json' --data ${shellQuote(body)}`,
+    {
+      timeoutMs: 1800000,
+      onStdout: (data) => {
+        buffer += data;
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() || "";
+        lines.filter(Boolean).forEach((line) => {
+          try {
+            const chunk = JSON.parse(line);
+            if (chunk.response) send({ type: "token", data: chunk.response });
+            if (chunk.done) send({ type: "done", data: chunk });
+          } catch (error) {
+            send({ type: "error", data: "Invalid Ollama response." });
+          }
+        });
+      }
+    }
+  );
+  if (result.code !== 0) {
+    send({ type: "error", data: result.stderr || "Ollama request failed." });
+    throw new Error(result.stderr || "Ollama request failed.");
+  }
+  return { success: true };
+});
 
 ipcMain.handle("ssh:deploy-service", async (event, configuration) => {
   const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -465,6 +559,20 @@ ipcMain.handle("ssh:restart-container", async (_event, containerName) => {
   }
   await executeRemote(`docker restart -- ${containerName}`);
   return { name: containerName, restartedAt: new Date().toISOString() };
+});
+
+ipcMain.handle("ssh:docker-action", async (_event, request) => {
+  const allowedActions = new Set(["start", "stop", "logs"]);
+  if (!request || !allowedActions.has(request.action) || !deploymentName(request.name)) {
+    throw new Error("Invalid Docker action.");
+  }
+  const command = request.action === "logs"
+    ? `docker logs --tail 100 ${shellQuote(request.name)}`
+    : `docker ${request.action} -- ${request.name}`;
+  if (request.action === "logs") return { name: request.name, action: request.action, output: await executeRemote(command, { timeoutMs: 30000 }) };
+  await executeRemote(command, { timeoutMs: 30000 });
+  remoteStatusCache.expiresAt = 0;
+  return { name: request.name, action: request.action };
 });
 
 ipcMain.handle("ssh:disconnect", () => {

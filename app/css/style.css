@@ -61,6 +61,11 @@ h1 { font-size: clamp(26px, 4vw, 32px); letter-spacing: -.035em; line-height: 1.
 .launcher-content { padding: 0 24px 24px; }
 .launcher-grid { display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); }
 .launcher-card { align-items: center; border: 1px solid var(--border); border-radius: 8px; display: flex; gap: 12px; justify-content: space-between; min-height: 84px; padding: 15px; }
+.service-state { color: var(--muted); font-size: 11px; margin-top: 5px; }
+.service-state.is-running { color: var(--success); }
+.service-state.is-stopped { color: #b45309; }
+.service-actions { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+.ai-actions { display: flex; gap: 8px; }
 .launcher-card h3, .ai-launcher h3 { font-size: 13px; font-weight: 700; }
 .launcher-card p, .ai-launcher p { color: var(--muted); font-size: 11px; line-height: 1.4; margin-top: 4px; }
 .ai-launcher { border: 1px solid var(--border); border-radius: 8px; margin-top: 16px; padding: 18px; }

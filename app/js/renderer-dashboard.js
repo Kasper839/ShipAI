@@ -17,7 +17,11 @@
     dockerWarning: document.getElementById("docker-warning")
   };
   let refreshTimer;
+  let refreshInFlight = false;
   let hardware = null;
+  let installedModels = [];
+  let chatModel = null;
+  let chatResponse = null;
   const history = { cpu: [], ram: [], network: [] };
   const serviceDefinitions = {
     portainer: { type: "container", name: "portainer", image: "portainer/portainer-ce:latest", ports: ["9000:9000"] },
@@ -54,27 +58,26 @@
   };
 
   const renderContainers = (containers) => {
-    elements.containerCount.textContent = String(containers.length);
+    elements.containerCount.textContent = String(containers.filter((container) => container.state === "running").length);
     elements.tableBody.replaceChildren();
     containers.forEach((container) => {
+      const running = container.state === "running" || /^up\b/i.test(container.status);
       const row = document.createElement("tr");
-      row.innerHTML = `<th scope="row"><span class="service-name"></span><span class="service-id">Docker container</span></th><td class="container-image"></td><td><span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span>Running</span></span></td><td class="last-action">Active</td><td><button class="button button-small button-secondary" type="button" data-restart-container>Restart</button></td>`;
+      row.innerHTML = `<th scope="row"><span class="service-name"></span><span class="service-id">Docker container</span></th><td class="container-image"></td><td><span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span data-container-state></span></span></td><td class="last-action">Synced</td><td><span data-container-actions></span></td>`;
       row.querySelector(".service-name").textContent = container.name;
       row.querySelector(".container-image").textContent = container.ports || "No published ports";
-      row.querySelector("[data-restart-container]").addEventListener("click", async (event) => {
-        const button = event.currentTarget;
-        button.disabled = true;
-        button.textContent = "Restarting...";
-        try {
-          await window.api.restartContainer(container.name);
-          row.querySelector(".last-action").textContent = "Restarted just now";
-        } catch (error) {
-          showError(error);
-        } finally {
-          button.disabled = false;
-          button.textContent = "Restart";
-        }
-      });
+      row.querySelector("[data-container-state]").textContent = running ? "Running" : "Stopped";
+      const actions = row.querySelector("[data-container-actions]");
+      const addAction = (action, label) => {
+        const button = document.createElement("button");
+        button.className = "button button-small button-secondary";
+        button.type = "button";
+        button.textContent = label;
+        button.addEventListener("click", () => runDockerAction(action, container, button));
+        actions.append(button);
+      };
+      addAction(running ? "stop" : "start", running ? "Stop" : "Start");
+      addAction("logs", "Logs");
       elements.tableBody.append(row);
     });
   };
@@ -82,7 +85,64 @@
   const renderDockerStatus = (docker) => {
     const dockerAvailable = docker && docker.dockerAvailable === true;
     elements.dockerWarning.hidden = dockerAvailable;
+    renderServiceCards(dockerAvailable ? docker.containers : []);
     renderContainers(dockerAvailable ? docker.containers : []);
+  };
+
+  const serviceMatches = (definition, container) => {
+    const name = `${container.name} ${container.image}`.toLowerCase();
+    return name.includes(definition.name.toLowerCase()) ||
+      (definition.name === "nginx-proxy-manager" && name.includes("nginx-proxy")) ||
+      (definition.name === "uptime-kuma" && name.includes("uptime"));
+  };
+
+  const runDockerAction = async (action, container, button) => {
+    button.disabled = true;
+    try {
+      const result = await window.api.dockerAction(action, container.name);
+      if (action === "logs") {
+        const log = document.getElementById("deployment-log");
+        log.hidden = false;
+        log.textContent = result.output || "No logs available.";
+        log.scrollTop = log.scrollHeight;
+      }
+    } catch (error) {
+      showError(error);
+    } finally {
+      button.disabled = false;
+    }
+  };
+
+  const renderServiceCards = (containers) => {
+    document.querySelectorAll("[data-service]").forEach((deployButton) => {
+      const definition = serviceDefinitions[deployButton.dataset.service];
+      const card = deployButton.closest(".launcher-card");
+      const container = containers.find((candidate) => serviceMatches(definition, candidate));
+      const state = card.querySelector("[data-service-state]");
+      const actions = card.querySelector("[data-service-actions]");
+      actions.replaceChildren();
+      if (!container) {
+        state.textContent = "Not installed";
+        state.className = "service-state";
+        deployButton.hidden = false;
+        return;
+      }
+      const running = container.state === "running" || /^up\b/i.test(container.status);
+      state.textContent = running ? "Running" : "Stopped";
+      state.className = `service-state ${running ? "is-running" : "is-stopped"}`;
+      deployButton.hidden = true;
+      const addAction = (action, label) => {
+        const button = document.createElement("button");
+        button.className = "button button-small button-secondary";
+        button.type = "button";
+        button.textContent = label;
+        button.addEventListener("click", () => runDockerAction(action, container, button));
+        actions.append(button);
+      };
+      if (running) addAction("stop", "Stop");
+      else addAction("start", "Start");
+      addAction("logs", "Logs");
+    });
   };
 
   const renderEnvironmentStatus = (environment) => {
@@ -208,6 +268,8 @@
   window.addEventListener("shipai:language-changed", updateHardwareStatus);
 
   const refresh = async () => {
+    if (refreshInFlight) return;
+    refreshInFlight = true;
     elements.refresh.disabled = true;
     try {
       const telemetry = await window.api.getTelemetry();
@@ -242,17 +304,95 @@
         dockerAvailable: telemetry.dockerAvailable === true,
         containers: telemetry.containers || []
       });
+      updateModelStatus(telemetry.ollama?.models || []);
       elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
     } catch (error) {
       showError(error);
     } finally {
       elements.refresh.disabled = false;
+      refreshInFlight = false;
     }
+  };
+
+  const updateModelStatus = (models) => {
+    installedModels = models;
+    const selected = document.getElementById("model-select").value.toLowerCase();
+    const installed = models.find((model) => model.name.toLowerCase() === selected || model.name.toLowerCase().startsWith(`${selected}:`));
+    const status = document.getElementById("model-status");
+    const chatButton = document.getElementById("start-chat");
+    if (installed) {
+      chatModel = installed.name;
+      status.textContent = `Installed on server: ${installed.name}`;
+      status.className = "service-state is-running";
+      chatButton.disabled = false;
+      document.getElementById("deploy-model").textContent = "Installed";
+      document.getElementById("deploy-model").disabled = true;
+    } else {
+      chatModel = null;
+      status.textContent = "Model is not installed";
+      status.className = "service-state";
+      chatButton.disabled = true;
+      document.getElementById("deploy-model").textContent = "Deploy model";
+      updateHardwareStatus();
+    }
+  };
+
+  const initializeChat = () => {
+    const panel = document.getElementById("chat-panel");
+    const chatButton = document.getElementById("start-chat");
+    const memory = document.getElementById("chat-memory");
+    window.api.onChatChunk((payload) => {
+      if (payload.type === "token" && chatResponse) {
+        chatResponse.textContent += payload.data;
+      } else if (payload.type === "error") {
+        if (chatResponse) chatResponse.textContent += `\nError: ${payload.data}`;
+        memory.textContent = "Idle";
+      } else if (payload.type === "done") {
+        memory.textContent = "Idle";
+      }
+      const messages = document.getElementById("chat-messages");
+      messages.scrollTop = messages.scrollHeight;
+    });
+    chatButton.addEventListener("click", () => {
+      panel.hidden = false;
+      document.getElementById("chat-prompt").focus();
+    });
+    document.getElementById("chat-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!chatModel) return;
+      const input = document.getElementById("chat-prompt");
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      const messages = document.getElementById("chat-messages");
+      const userMessage = document.createElement("div");
+      userMessage.className = "chat-message chat-message--user";
+      userMessage.textContent = prompt;
+      messages.append(userMessage);
+      chatResponse = document.createElement("div");
+      chatResponse.className = "chat-message chat-message--assistant";
+      messages.append(chatResponse);
+      input.value = "";
+      document.getElementById("chat-send").disabled = true;
+      memory.textContent = "Responding";
+      try {
+        await window.api.sendChatPrompt(chatModel, prompt);
+      } catch (error) {
+        chatResponse.textContent = `Error: ${error.message}`;
+      } finally {
+        document.getElementById("chat-send").disabled = false;
+        memory.textContent = "Idle";
+      }
+    });
   };
 
   elements.refresh.addEventListener("click", refresh);
   setDashboardTab("overview");
   initializeLauncher();
+  initializeChat();
+  document.getElementById("model-select").addEventListener("change", () => {
+    updateHardwareStatus();
+    updateModelStatus(installedModels);
+  });
   checkHardware();
   elements.disconnect.addEventListener("click", async () => {
     window.clearInterval(refreshTimer);
@@ -260,5 +400,5 @@
     window.location.assign("index.html");
   });
   refresh();
-  refreshTimer = window.setInterval(refresh, 5000);
+  refreshTimer = window.setInterval(refresh, 1000);
 })();

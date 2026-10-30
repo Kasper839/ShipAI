@@ -49,19 +49,23 @@
         <div id="launcher-content" class="launcher-content">
           <div class="launcher-grid">
             <article class="launcher-card" data-i18n-title="portainerTip" title="Portainer provides a web interface for managing Docker containers.">
-              <div><h3>Portainer</h3><p data-i18n="portainer">Docker management UI</p></div>
+              <div><h3>Portainer</h3><p data-i18n="portainer">Docker management UI</p><p class="service-state" data-service-state>Not installed</p></div>
+              <div class="service-actions" data-service-actions></div>
               <button class="button button-small button-secondary" data-service="portainer" type="button" data-i18n="deploy">Deploy</button>
             </article>
             <article class="launcher-card" data-i18n-title="nginxTip" title="Nginx Proxy Manager handles reverse proxy routes and SSL certificates.">
-              <div><h3>Nginx Proxy Manager</h3><p data-i18n="nginx">Reverse proxy and SSL</p></div>
+              <div><h3>Nginx Proxy Manager</h3><p data-i18n="nginx">Reverse proxy and SSL</p><p class="service-state" data-service-state>Not installed</p></div>
+              <div class="service-actions" data-service-actions></div>
               <button class="button button-small button-secondary" data-service="nginx-proxy-manager" type="button" data-i18n="deploy">Deploy</button>
             </article>
             <article class="launcher-card" data-i18n-title="nextcloudTip" title="Nextcloud provides private file storage and collaboration.">
-              <div><h3>Nextcloud</h3><p data-i18n="nextcloud">Private files and collaboration</p></div>
+              <div><h3>Nextcloud</h3><p data-i18n="nextcloud">Private files and collaboration</p><p class="service-state" data-service-state>Not installed</p></div>
+              <div class="service-actions" data-service-actions></div>
               <button class="button button-small button-secondary" data-service="nextcloud" type="button" data-i18n="deploy">Deploy</button>
             </article>
             <article class="launcher-card" data-i18n-title="uptimeTip" title="Uptime Kuma monitors service availability and incidents.">
-              <div><h3>Uptime Kuma</h3><p data-i18n="uptime">Service availability monitoring</p></div>
+              <div><h3>Uptime Kuma</h3><p data-i18n="uptime">Service availability monitoring</p><p class="service-state" data-service-state>Not installed</p></div>
+              <div class="service-actions" data-service-actions></div>
               <button class="button button-small button-secondary" data-service="uptime-kuma" type="button" data-i18n="deploy">Deploy</button>
             </article>
           </div>
@@ -69,9 +73,14 @@
             <div class="ai-launcher-heading"><div><h3 data-i18n="ai">AI Engine</h3><p data-i18n="aiHelp">Select a model based on this server's available resources.</p></div><span id="hardware-status" class="status-badge status-badge--neutral" data-i18n="checking">Checking hardware</span></div>
             <div class="ai-controls">
               <label class="form-field" for="model-select"><span class="sr-only">AI model</span><select id="model-select" class="launcher-select"><option value="llama3:8b" data-ram="8" data-vram="0">Llama 3 8B</option><option value="deepseek-r1:7b" data-ram="8" data-vram="0">DeepSeek 7B</option><option value="phi3:mini" data-ram="4" data-vram="0">Phi-3</option></select></label>
-              <button id="deploy-model" class="button button-primary" type="button" disabled data-i18n="deployModel">Deploy model</button>
+              <div class="ai-actions"><button id="deploy-model" class="button button-primary" type="button" disabled data-i18n="deployModel">Deploy model</button><button id="start-chat" class="button button-secondary" type="button" disabled>Start Chat</button></div>
             </div>
-            <p id="model-warning" class="field-error" role="alert" hidden></p>
+            <p id="model-warning" class="field-error" role="alert" hidden></p><p id="model-status" class="service-state">Checking installed models...</p>
+            <section id="chat-panel" class="chat-panel" hidden aria-labelledby="chat-title">
+              <div class="chat-header"><h3 id="chat-title">Chat with installed model</h3><span id="chat-memory" class="status-badge status-badge--neutral">Idle</span></div>
+              <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
+              <form id="chat-form" class="chat-form"><input id="chat-prompt" type="text" placeholder="Ask your model..." autocomplete="off" required /><button id="chat-send" class="button button-primary" type="submit">Send</button></form>
+            </section>
           </div>
           <div id="deployment-log" class="deployment-log" role="log" aria-live="polite" hidden></div>
         </div>
