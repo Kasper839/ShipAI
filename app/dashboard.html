@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f8fafc" />
+    <title>ShipAI | Server dashboard</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="js/i18n.js" defer></script>
+    <script src="js/renderer-dashboard.js" defer></script>
+  </head>
+  <body class="app-body">
+    <header class="topbar dashboard-topbar">
+      <a class="brand" href="dashboard.html" aria-label="ShipAI dashboard">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span class="brand-name">ShipAI</span>
+      </a>
+      <nav class="dashboard-tabs" aria-label="Dashboard sections">
+        <button class="dashboard-tab is-active" type="button" data-dashboard-tab="overview" aria-selected="true" data-i18n="stats">Statistiky a Docker</button>
+        <button class="dashboard-tab" type="button" data-dashboard-tab="marketplace" aria-selected="false" data-i18n="install">Instalace &amp; AI Modely</button>
+      </nav>
+      <label class="language-control" for="language-select"><span class="sr-only">Language</span><select id="language-select" aria-label="Language"></select></label>
+      <div class="dashboard-actions">
+        <span class="connection-indicator"><span class="status-dot" aria-hidden="true"></span><span id="connected-host" data-i18n="connected">Connected to server</span></span>
+        <button id="disconnect-button" class="button button-secondary" type="button" data-i18n="disconnect">Disconnect</button>
+      </div>
+    </header>
+
+    <main class="dashboard-layout">
+      <div class="dashboard-heading">
+        <div>
+          <div class="section-kicker">Server overview</div>
+          <h1 data-i18n="dashboard">Operations dashboard</h1>
+          <p class="section-lead" data-i18n="monitor">Monitor system health and manage your Docker services.</p>
+        </div>
+        <button id="refresh-button" class="button button-secondary" type="button" data-i18n="refresh">Refresh data</button>
+      </div>
+
+      <div id="dashboard-error" class="error-banner" role="alert" hidden></div>
+      <div class="dashboard-view" data-dashboard-view="marketplace" hidden>
+        <section class="panel launcher-panel" aria-labelledby="launcher-title">
+        <div class="panel-header">
+          <div>
+            <h2 id="launcher-title" data-i18n="launcher">Services &amp; AI Launcher</h2>
+            <p data-i18n="launcherHelp">Deploy trusted self-hosted services directly to this server.</p>
+          </div>
+          <button id="launcher-toggle" class="button button-secondary" type="button" aria-expanded="true" data-i18n="collapse">Collapse</button>
+        </div>
+        <div id="launcher-content" class="launcher-content">
+          <div class="launcher-grid">
+            <article class="launcher-card" data-i18n-title="portainerTip" title="Portainer provides a web interface for managing Docker containers.">
+              <div><h3>Portainer</h3><p data-i18n="portainer">Docker management UI</p></div>
+              <button class="button button-small button-secondary" data-service="portainer" type="button" data-i18n="deploy">Deploy</button>
+            </article>
+            <article class="launcher-card" data-i18n-title="nginxTip" title="Nginx Proxy Manager handles reverse proxy routes and SSL certificates.">
+              <div><h3>Nginx Proxy Manager</h3><p data-i18n="nginx">Reverse proxy and SSL</p></div>
+              <button class="button button-small button-secondary" data-service="nginx-proxy-manager" type="button" data-i18n="deploy">Deploy</button>
+            </article>
+            <article class="launcher-card" data-i18n-title="nextcloudTip" title="Nextcloud provides private file storage and collaboration.">
+              <div><h3>Nextcloud</h3><p data-i18n="nextcloud">Private files and collaboration</p></div>
+              <button class="button button-small button-secondary" data-service="nextcloud" type="button" data-i18n="deploy">Deploy</button>
+            </article>
+            <article class="launcher-card" data-i18n-title="uptimeTip" title="Uptime Kuma monitors service availability and incidents.">
+              <div><h3>Uptime Kuma</h3><p data-i18n="uptime">Service availability monitoring</p></div>
+              <button class="button button-small button-secondary" data-service="uptime-kuma" type="button" data-i18n="deploy">Deploy</button>
+            </article>
+          </div>
+          <div class="ai-launcher">
+            <div class="ai-launcher-heading"><div><h3 data-i18n="ai">AI Engine</h3><p data-i18n="aiHelp">Select a model based on this server's available resources.</p></div><span id="hardware-status" class="status-badge status-badge--neutral" data-i18n="checking">Checking hardware</span></div>
+            <div class="ai-controls">
+              <label class="form-field" for="model-select"><span class="sr-only">AI model</span><select id="model-select" class="launcher-select"><option value="llama3:8b" data-ram="8" data-vram="0">Llama 3 8B</option><option value="deepseek-r1:7b" data-ram="8" data-vram="0">DeepSeek 7B</option><option value="phi3:mini" data-ram="4" data-vram="0">Phi-3</option></select></label>
+              <button id="deploy-model" class="button button-primary" type="button" disabled data-i18n="deployModel">Deploy model</button>
+            </div>
+            <p id="model-warning" class="field-error" role="alert" hidden></p>
+          </div>
+          <div id="deployment-log" class="deployment-log" role="log" aria-live="polite" hidden></div>
+        </div>
+        </section>
+      </div>
+      <div class="dashboard-view is-active" data-dashboard-view="overview">
+      <div id="environment-warning" class="warning-banner" role="alert" hidden></div>
+      <section class="panel charts-panel" aria-labelledby="charts-title">
+        <div class="panel-header"><div><h2 id="charts-title">Resource history</h2><p>Live readings collected from the connected server.</p></div><span id="charts-status" class="updated-label">Collecting data</span></div>
+        <div class="chart-grid">
+          <article class="chart-card"><div class="chart-title"><span data-i18n="cpu">CPU usage</span><span class="info-tooltip" data-i18n-title="cpuTip" title="CPU usage shows how busy the processor is.">i</span><strong id="chart-cpu-value">N/A</strong></div><svg id="cpu-chart" class="telemetry-chart" viewBox="0 0 320 110" role="img" aria-label="CPU usage history"></svg></article>
+          <article class="chart-card"><div class="chart-title"><span data-i18n="ram">RAM utilization</span><span class="info-tooltip" data-i18n-title="ramTip" title="RAM controls how many services can run together.">i</span><strong id="chart-ram-value">N/A</strong></div><svg id="ram-chart" class="telemetry-chart" viewBox="0 0 320 110" role="img" aria-label="RAM utilization history"></svg></article>
+          <article class="chart-card"><div class="chart-title"><span data-i18n="network">Network usage</span><span class="info-tooltip" data-i18n-title="networkTip" title="The network graph shows data transferred through the server.">i</span><strong id="chart-network-value">N/A</strong></div><svg id="network-chart" class="telemetry-chart" viewBox="0 0 320 110" role="img" aria-label="Network usage history"></svg></article>
+        </div>
+      </section>
+      <section class="metric-grid" aria-label="System metrics">
+        <article class="metric-card">
+          <div class="metric-label"><span data-i18n="temp">CPU temperature</span><span class="info-tooltip" data-i18n-title="tempTip" title="CPU temperature helps monitor cooling.">i</span></div>
+          <div class="metric-value"><span id="cpu-temperature">N/A</span><span class="metric-unit">°C</span></div>
+          <div class="metric-meta"><span class="status-dot status-dot--neutral" aria-hidden="true"></span>Waiting for telemetry</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label"><span data-i18n="ram">RAM usage</span><span class="info-tooltip" data-i18n-title="ramTip" title="RAM controls how many services can run together.">i</span></div>
+          <div class="metric-value"><span id="ram-usage">N/A</span><span class="metric-unit">GB / <span id="ram-total">N/A</span> GB</span></div>
+          <div class="progress-track" aria-label="RAM usage"><span id="ram-progress" class="progress-value"></span></div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">Active containers</div>
+          <div class="metric-value"><span id="container-count">N/A</span><span class="metric-unit">running</span></div>
+          <div class="metric-meta"><span class="status-dot status-dot--neutral" aria-hidden="true"></span>Waiting for telemetry</div>
+        </article>
+      </section>
+
+      <section class="panel" aria-labelledby="containers-title">
+        <div class="panel-header">
+          <div>
+            <h2 id="containers-title"><span data-i18n="containers">Active containers</span><span class="info-tooltip" data-i18n-title="dockerTip" title="Containers isolate applications and dependencies.">i</span></h2>
+            <p>Docker services currently deployed on this server.</p>
+          </div>
+          <span id="last-updated" class="updated-label">Updated just now</span>
+        </div>
+        <div id="docker-warning" class="warning-banner" role="alert" hidden>
+          <strong>Docker is not installed on this server.</strong>
+          <span>Install Docker on the remote host to manage containers from ShipAI.</span>
+        </div>
+        <div class="table-wrap">
+          <table class="container-table">
+            <thead>
+              <tr><th scope="col">Service</th><th scope="col">Ports</th><th scope="col">Status</th><th scope="col">Last action</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
+            </thead>
+            <tbody id="container-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+      </div>
+    </main>
+    <div id="dashboard-toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="sudo-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="sudo-title" hidden>
+    <section class="modal-card">
+      <button id="close-sudo" class="modal-close" type="button" aria-label="Close">×</button>
+      <div class="section-kicker">Permissions</div>
+      <h2 id="sudo-title" data-i18n="sudoTitle">Administrator permission required</h2>
+      <p class="section-lead" data-i18n="sudoHelp">Enter the sudo password to install Ollama. It is used once and never stored.</p>
+      <form id="sudo-form" class="form-stack">
+        <div class="form-field"><label for="sudo-password" data-i18n="password">Password</label><input id="sudo-password" type="password" autocomplete="current-password" required /></div>
+        <p id="sudo-error" class="field-error" role="alert" hidden>Špatné heslo / Invalid password</p>
+        <div class="modal-actions"><button id="cancel-sudo" class="button button-secondary" type="button" data-i18n="cancel">Cancel</button><button class="button button-primary" type="submit" data-i18n="continue">Continue</button></div>
+      </form>
+    </section>
+    </div>
+  </body>
+</html>
