@@ -1,99 +1,83 @@
-# 🚀 ShipAI
+# ShipAI
 
-> **From zero to your own private AI & Cloud server in 3 clicks.**
-> Fully automated, beginner-friendly, and 100% private.
+## High-Performance Remote Server Management & Local AI Marketplace
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub Stars](https://img.shields.io/github/stars/Kasper839/ShipAI?style=social)](https://github.com/Kasper839/ShipAI)
-[![Docker Powered](https://img.shields.io/badge/Docker-Powered-blue?logo=docker)](https://www.docker.com/)
+ShipAI is an Electron desktop control plane for managing Linux AI infrastructure over SSH. Monitor a remote host in real time, operate AI-focused Docker runtimes, and choose Ollama models using hardware-aware compatibility guidance—all from one private workspace.
 
----
+[![Version](https://img.shields.io/badge/version-v1.0.0%20Stable-2563eb.svg)](https://github.com/Kasper839/ShipAI/releases)
+[![License](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Electron%20%2F%20Node.js%20%2F%20Linux-64748b.svg)](https://www.electronjs.org/)
+[![Linux hosts](https://img.shields.io/badge/hosts-Arch%20Linux%20%7C%20Ubuntu-e95420.svg)](https://ubuntu.com/)
 
-## 💡 What is ShipAI?
+## Why ShipAI?
 
-**ShipAI** is a desktop application that turns any remote Linux server or old PC into a powerful, private AI and cloud hosting node.
+ShipAI keeps server operations and local AI deployment in one focused interface. Credentials remain in the active session, commands are executed on the connected host, and your models and data stay on your infrastructure.
 
-No terminal required. No complex SSH commands. No manual Docker configuration.
+## Key features
 
-Whether you are a seasoned developer or a complete beginner, **ShipAI** handles server provisioning, Docker stack deployments, and resource monitoring through a beautiful, step-by-step visual UI.
+- **Real-time telemetry** — CPU, temperature, RAM, network, disk I/O, and mounted filesystem capacity.
+- **Docker lifecycle management** — Start, stop, restart, and inspect AI infrastructure containers without manually repeating shell commands.
+- **Hardware-aware AI marketplace** — Compare model requirements with remote RAM and VRAM before pulling a model.
+- **Remote power management** — Confirmed remote restart and shutdown controls using the active sudo session.
+- **Ollama model operations** — Pull, remove, and start chats with installed models through a streamed interface.
+- **Private by design** — ShipAI connects directly to your host over SSH; there is no hosted control plane.
 
----
+## Supported AI models
 
-## 🔥 Key Features
+The expandable catalogue covers lightweight edge inference through enterprise-scale, multi-GPU systems:
 
-* 🤖 **Smart AI Advisor:** Unsure what model or server specs you need? Tell the built-in local AI assistant what you want to achieve, and it will generate the optimal server setup for you.
-* ⚡ **One-Click SSH Deployment:** Connect via SSH and let ShipAI install Docker, configure security, and deploy your services automatically.
-* 🔒 **100% Private & Self-Hosted:** All your data, models, and files stay strictly on your hardware.
-* 📚 **Jargon-Free Explanations:** Every setting, port, and slider includes plain-language tooltips and recommended "Best Practice" defaults.
-* 📊 **Live Server Dashboard:** Monitor CPU, RAM, disk usage, container status, and restart or update services with a single click.
+- **Edge and workstation:** Phi-3.5 Mini, Phi-4, Gemma 2, Llama 3.1 8B, Qwen 2.5 Coder, and DeepSeek-R1 Distill.
+- **High-performance:** Llama 3.1 70B, CodeLlama, and Qwen 2.5 72B.
+- **Enterprise and agentic:** Kimi K3, GLM-5.2/5.3, DeepSeek V4/R1, and Llama 3.1 405B.
 
----
+Each model includes architecture, context window, capabilities, quantized minimums, recommended inference sizing, and a live compatibility state.
 
-## 🛠️ Supported Stacks & One-Click Installs
+## Quick start
 
-With ShipAI, you can instantly deploy:
+### Prerequisites
 
-* **Local AI / LLMs:** Ollama, Open WebUI, vLLM, Text-Generation-WebUI
-* **Private Cloud & Storage:** Nextcloud, MinIO
-* **Automation & Databases:** n8n, PostgreSQL, Redis
-* **System Monitoring:** Netdata, Portainer, Uptime Kuma
+- Node.js and npm
+- A Linux host reachable over SSH
+- Docker installed on the remote host for AI infrastructure containers
+- Ollama installed on the remote host, or permission to install it through ShipAI
+- A user with the required sudo permissions for Docker/Ollama setup and power actions
 
----
+### Install from source
 
-## 🚀 Quick Start
+```bash
+git clone https://github.com/Kasper839/ShipAI.git
+cd ShipAI
+npm install
+npm start
+```
 
-### 1. Download ShipAI
-Get the latest release for your operating system from the [Releases](https://github.com/Kasper839/ShipAI/releases) page:
-* 🪟 **Windows** (`ShipAI-Setup.exe`)
-* 🍏 **macOS** (`ShipAI.dmg`)
-* 🐧 **Linux** (`ShipAI.AppImage`)
+Connect using the host address, SSH port, username, and password. ShipAI then probes the host, reports hardware capability, and opens the AI infrastructure dashboard.
 
-### 2. Connect Your Server
-1. Launch **ShipAI**.
-2. Enter your server's **IP address** and **SSH credentials** (Password or SSH Key).
-3. Let ShipAI test the connection and verify system hardware.
+## Development
 
-### 3. Deploy
-Pick your desired stack manually or ask the **AI Advisor**, click **Deploy**, and sit back while ShipAI configures everything automatically!
+Run the Electron app locally:
 
----
+```bash
+npm run dev
+```
 
-## 📸 Screenshots
+Create a distributable package with:
 
-| AI Setup Assistant | Visual Server Dashboard |
-|---|---|
-| ![AI Assistant](assets/screenshot-ai.png) | ![Dashboard](assets/screenshot-dashboard.png) |
+```bash
+npm run package
+```
 
----
+The application entry point is `main/main.js`; the renderer and model catalogue live under `app/`.
 
-## 🗺️ Roadmap
+## Security notes
 
-- [x] SSH Connection & Automated Docker installation
-- [x] Basic AI Stack Deployment (Ollama + Open WebUI)
-- [ ] Smart AI Server Configuration Assistant
-- [ ] One-Click Backup & Restore system
-- [ ] Multi-server management panel
+ShipAI is intended for trusted, SSH-accessible infrastructure. Use a dedicated operator account where practical, restrict SSH exposure, and grant only the sudo permissions required by your deployment policy. Never commit credentials, private keys, or host-specific secrets.
 
----
+## Contributing
 
-## 🤝 Contributing
+Bug reports, documentation improvements, model catalogue updates, and code contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request.
 
-Contributions are what make the open-source community such an amazing place! Any contributions you make are **greatly appreciated**.
+## License
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+ShipAI is released under the [MIT License](LICENSE).
 
----
-
-## 📄 License
-
-Distributed under the **MIT License**. See `LICENSE` for more information.
-
----
-
-<p align="center">
-  Crafted with ❤️ by developers who hate tedious server setups.
-</p>
