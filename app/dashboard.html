@@ -22,6 +22,8 @@
       <label class="language-control" for="language-select"><span class="sr-only">Language</span><select id="language-select" aria-label="Language"></select></label>
       <div class="dashboard-actions">
         <span class="connection-indicator"><span class="status-dot" aria-hidden="true"></span><span id="connected-host" data-i18n="connected">Connected to server</span></span>
+        <button id="restart-server" class="button button-secondary" type="button">Restart server</button>
+        <button id="shutdown-server" class="button button-danger" type="button">Shutdown server</button>
         <button id="disconnect-button" class="button button-secondary" type="button" data-i18n="disconnect">Disconnect</button>
       </div>
     </header>
@@ -61,7 +63,12 @@
           <article class="chart-card"><div class="chart-title"><span data-i18n="cpu">CPU usage</span><span class="info-tooltip" data-i18n-title="cpuTip" title="CPU usage shows how busy the processor is.">i</span><strong id="chart-cpu-value">N/A</strong></div><svg id="cpu-chart" class="telemetry-chart" viewBox="0 0 320 110" role="img" aria-label="CPU usage history"></svg></article>
           <article class="chart-card"><div class="chart-title"><span data-i18n="ram">RAM utilization</span><span class="info-tooltip" data-i18n-title="ramTip" title="RAM controls how many services can run together.">i</span><strong id="chart-ram-value">N/A</strong></div><svg id="ram-chart" class="telemetry-chart" viewBox="0 0 320 110" role="img" aria-label="RAM utilization history"></svg></article>
           <article class="chart-card"><div class="chart-title"><span data-i18n="network">Network usage</span><span class="info-tooltip" data-i18n-title="networkTip" title="The network graph shows data transferred through the server.">i</span><strong id="chart-network-value">N/A</strong></div><svg id="network-chart" class="telemetry-chart" viewBox="0 0 320 110" role="img" aria-label="Network usage history"></svg></article>
+          <article class="chart-card"><div class="chart-title"><span>Disk I/O</span><strong id="chart-disk-value">N/A</strong></div><svg id="disk-chart" class="telemetry-chart" viewBox="0 0 320 110" role="img" aria-label="Disk I/O history"></svg></article>
         </div>
+      </section>
+      <section class="panel storage-panel" aria-labelledby="storage-title">
+        <div class="panel-header"><div><h2 id="storage-title">Storage capacity</h2><p>Capacity and throughput per mounted filesystem.</p></div></div>
+        <div id="storage-list" class="storage-list"><p class="catalogue-loading">Waiting for disk telemetry...</p></div>
       </section>
       <section class="metric-grid" aria-label="System metrics">
         <article class="metric-card">
@@ -74,34 +81,8 @@
           <div class="metric-value"><span id="ram-usage">N/A</span><span class="metric-unit">GB / <span id="ram-total">N/A</span> GB</span></div>
           <div class="progress-track" aria-label="RAM usage"><span id="ram-progress" class="progress-value"></span></div>
         </article>
-        <article class="metric-card">
-          <div class="metric-label">Active containers</div>
-          <div class="metric-value"><span id="container-count">N/A</span><span class="metric-unit">running</span></div>
-          <div class="metric-meta"><span class="status-dot status-dot--neutral" aria-hidden="true"></span>Waiting for telemetry</div>
-        </article>
       </section>
 
-      <section class="panel" aria-labelledby="containers-title">
-        <div class="panel-header">
-          <div>
-           <h2 id="containers-title"><span data-i18n="containers">AI infrastructure containers</span><span class="info-tooltip" data-i18n-title="dockerTip" title="Containers isolate AI runtimes and data services.">i</span></h2>
-           <p>Ollama, vector database and LLM backend containers on this server.</p>
-          </div>
-          <span id="last-updated" class="updated-label">Updated just now</span>
-        </div>
-        <div id="docker-warning" class="warning-banner" role="alert" hidden>
-          <strong>Docker is not installed on this server.</strong>
-          <span>Install Docker on the remote host to manage containers from ShipAI.</span>
-        </div>
-        <div class="table-wrap">
-          <table class="container-table">
-            <thead>
-              <tr><th scope="col">Runtime</th><th scope="col">Ports</th><th scope="col">Status</th><th scope="col">Last action</th><th scope="col"><span class="sr-only">Actions</span></th></tr>
-            </thead>
-            <tbody id="container-table-body"></tbody>
-          </table>
-        </div>
-      </section>
       </div>
     </main>
     <div id="dashboard-toast" class="toast" role="status" aria-live="polite" hidden></div>

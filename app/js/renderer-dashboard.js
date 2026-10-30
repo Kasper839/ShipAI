@@ -5,11 +5,11 @@
   const $ = (id) => document.getElementById(id);
   const elements = {
     temperature: $("cpu-temperature"), ramUsage: $("ram-usage"), ramTotal: $("ram-total"),
-    ramProgress: $("ram-progress"), containerCount: $("container-count"), tableBody: $("container-table-body"),
+    ramProgress: $("ram-progress"),
     refresh: $("refresh-button"), disconnect: $("disconnect-button"), error: $("dashboard-error"),
-    environmentWarning: $("environment-warning"), updated: $("last-updated"), dockerWarning: $("docker-warning")
+    environmentWarning: $("environment-warning"), updated: $("charts-status")
   };
-  const history = { cpu: [], ram: [], network: [] };
+  const history = { cpu: [], ram: [], network: [], disk: [] };
   let refreshInFlight = false;
   let refreshTimer;
   let hardware = null;
@@ -60,8 +60,33 @@
     const missing = environment.missingComponents?.length ? ` Missing components: ${environment.missingComponents.join(", ")}.` : "";
     elements.environmentWarning.textContent = `AI runtime environment is incomplete.${missing} ${environment.error || ""}`.trim(); elements.environmentWarning.hidden = false;
   };
+  const renderStorage = (disk) => {
+    const root = $("storage-list"); root.replaceChildren();
+    if (!disk.filesystems?.length) { root.textContent = "Filesystem telemetry is unavailable."; return; }
+    disk.filesystems.forEach((filesystem) => {
+      const item = document.createElement("article"); item.className = "storage-item";
+      item.innerHTML = `<div class="storage-heading"><strong></strong><span></span></div><div class="progress-track"><span class="progress-value"></span></div><div class="storage-meta"><span></span><span></span></div>`;
+      item.querySelector("strong").textContent = filesystem.mount; item.querySelector(".storage-heading span").textContent = `${filesystem.usagePercent}% used`;
+      item.querySelector(".progress-value").style.width = `${Math.min(100, filesystem.usagePercent)}%`;
+      item.querySelector(".storage-meta span:first-child").textContent = `${formatBytes(filesystem.usedBytes)} used of ${formatBytes(filesystem.totalBytes)}`;
+      item.querySelector(".storage-meta span:last-child").textContent = `${formatBytes(filesystem.availableBytes)} free`;
+      root.append(item);
+    });
+  };
+  const formatBytes = (bytes) => { if (!Number.isFinite(bytes)) return "N/A"; if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`; return `${(bytes / 1024 ** 3).toFixed(1)} GB`; };
 
   const modelInstalled = (model) => installedModels.find((installed) => installed.name.toLowerCase() === model.ollama.toLowerCase() || installed.name.toLowerCase().startsWith(`${model.ollama.toLowerCase()}:`));
+  const specGb = (value) => Number.parseFloat(String(value).replace(",", "."));
+  const compatibility = (model) => {
+    if (!hardware || !Number.isFinite(hardware.totalMemoryBytes)) return { state: "unknown", label: "CHECKING HARDWARE", reason: "Hardware telemetry is still being collected." };
+    const ram = hardware.totalMemoryBytes / 1024 ** 3;
+    const vram = (hardware.totalVramBytes || 0) / 1024 ** 3;
+    const minRam = specGb(model.minimum.ram); const minVram = specGb(model.minimum.vram);
+    const recommendedRam = specGb(model.recommended.ram); const recommendedVram = specGb(model.recommended.vram);
+    if (ram < minRam || (minVram > 0 && vram < minVram)) return { state: "incompatible", label: "INCOMPATIBLE / UNSUPPORTED", reason: `Requires ${model.minimum.ram} RAM${minVram ? ` and ${model.minimum.vram} VRAM` : ""}; server has ${ram.toFixed(1)}GB RAM${hardware.gpuAvailable ? ` and ${vram.toFixed(1)}GB VRAM` : " and no detected VRAM"}.` };
+    if (ram >= recommendedRam && (!recommendedVram || vram >= recommendedVram)) return { state: "full", label: "FULLY COMPATIBLE", reason: "Server meets the recommended inference profile." };
+    return { state: "slow", label: "RUNS WITH QUANTIZATION / SLOW", reason: `Meets minimum sizing (${model.minimum.ram} RAM / ${model.minimum.vram} VRAM), but recommended capacity is ${model.recommended.ram} RAM / ${model.recommended.vram} VRAM.` };
+  };
   const openModelDetails = (model) => {
     const existing = $("model-modal"); if (existing) existing.remove();
     const modal = document.createElement("div"); modal.id = "model-modal"; modal.className = "modal-backdrop"; modal.innerHTML = `<article class="modal-card model-modal-card" role="dialog" aria-modal="true" aria-labelledby="model-modal-title"><button class="modal-close" type="button" aria-label="Close">×</button><div class="section-kicker">${model.category}</div><h2 id="model-modal-title"></h2><p class="section-lead"></p><div class="model-modal-tags"></div><dl class="spec-list"></dl><div class="modal-actions"></div></article>`;
@@ -86,9 +111,9 @@
     const root = $("model-catalogue"); root.replaceChildren();
     const groups = [...new Set(visible.map((model) => model.category))];
     groups.forEach((group) => { const section = document.createElement("section"); section.className = "model-group"; section.innerHTML = `<div class="model-group-heading"><h3>${group}</h3><span>${visible.filter((model) => model.category === group).length} engines</span></div><div class="model-grid"></div>`; const grid = section.querySelector(".model-grid");
-      visible.filter((model) => model.category === group).forEach((model) => { const installed = modelInstalled(model); const card = document.createElement("article"); card.className = "model-card"; card.dataset.modelId = model.id; card.innerHTML = `<button class="model-card-main" type="button"><span class="model-card-top"><span class="model-scale">${model.scale}</span><span class="model-status ${installed ? "is-installed" : ""}">${installed ? "Installed" : "Available"}</span></span><h4></h4><p class="model-description"></p><span class="model-card-meta"></span><span class="model-tags"></span></button><div class="model-card-actions"><button class="button button-small button-secondary model-details" type="button">View specs</button>${installed ? '<button class="button button-small button-secondary model-chat" type="button">Start Chat</button>' : ""}<button class="button button-small button-primary model-install" type="button"></button></div>`;
+      visible.filter((model) => model.category === group).forEach((model) => { const installed = modelInstalled(model); const fit = compatibility(model); const card = document.createElement("article"); card.className = "model-card"; card.dataset.modelId = model.id; card.innerHTML = `<button class="model-card-main" type="button"><span class="model-card-top"><span class="model-scale">${model.scale}</span><span class="model-status ${installed ? "is-installed" : ""}">${installed ? "Installed" : "Available"}</span></span><h4></h4><p class="model-description"></p><span class="model-card-meta"></span><span class="model-tags"></span><span class="compatibility-badge compatibility-${fit.state}" title=""></span></button><div class="model-card-actions"><button class="button button-small button-secondary model-details" type="button">View specs</button>${installed ? '<button class="button button-small button-secondary model-chat" type="button">Start Chat</button>' : ""}<button class="button button-small button-primary model-install" type="button"></button></div>`;
         card.querySelector("h4").textContent = model.name; card.querySelector(".model-description").textContent = model.description; card.querySelector(".model-card-meta").textContent = `${model.architecture} · ${model.context}`; card.querySelector(".model-tags").innerHTML = model.capabilities.slice(0, 3).map((item) => `<span class="model-tag">${item}</span>`).join("");
-        const action = card.querySelector(".model-install"); action.textContent = installed ? "Delete / Remove" : "Install / Pull"; if (installed) action.classList.replace("button-primary", "button-secondary");
+        const badge = card.querySelector(".compatibility-badge"); badge.textContent = fit.label; badge.title = fit.reason; const action = card.querySelector(".model-install"); action.textContent = installed ? "Delete / Remove" : "Install / Pull"; if (installed) action.classList.replace("button-primary", "button-secondary"); if (!installed && fit.state === "incompatible") { action.disabled = true; action.title = fit.reason; }
         card.querySelector(".model-card-main").addEventListener("click", () => openModelDetails(model)); card.querySelector(".model-details").addEventListener("click", () => openModelDetails(model)); card.querySelector(".model-chat")?.addEventListener("click", () => { chatModel = installed.name; $("chat-panel").hidden = false; $("chat-title").textContent = `Chat with ${model.name}`; $("chat-prompt").focus(); }); action.addEventListener("click", () => installed ? removeModel(model, action) : deployModel(model, action)); grid.append(card);
       }); root.append(section);
     });
@@ -114,7 +139,8 @@
       if (telemetry.cpuUsagePercent !== null) { addHistoryPoint("cpu", telemetry.cpuUsagePercent); $("chart-cpu-value").textContent = `${telemetry.cpuUsagePercent}%`; }
       if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); $("chart-network-value").textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
       if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); $("chart-ram-value").textContent = `${telemetry.memory.usagePercent}%`; }
-      renderChart("cpu-chart", history.cpu, "#4f46e5", 0, 100); renderChart("ram-chart", history.ram, "#0f766e", 0, 100); renderChart("network-chart", history.network, "#b45309"); renderEnvironmentStatus(telemetry.environment); renderDockerStatus(telemetry.docker || { dockerAvailable: false, containers: [] }); updateModelStatus(telemetry.ollama?.models || []); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
+      if (telemetry.disk) { const diskRate = (telemetry.disk.readBytesPerSecond || 0) + (telemetry.disk.writeBytesPerSecond || 0); addHistoryPoint("disk", diskRate); $("chart-disk-value").textContent = `${(diskRate / 1024 / 1024).toFixed(1)} MB/s`; renderStorage(telemetry.disk); }
+      renderChart("cpu-chart", history.cpu, "#4f46e5", 0, 100); renderChart("ram-chart", history.ram, "#0f766e", 0, 100); renderChart("network-chart", history.network, "#b45309"); renderChart("disk-chart", history.disk, "#db2777"); renderEnvironmentStatus(telemetry.environment); updateModelStatus(telemetry.ollama?.models || []); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
     } catch (error) { showError(error); } finally { elements.refresh.disabled = false; refreshInFlight = false; }
   };
 
@@ -124,6 +150,12 @@
   };
   document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => tab.addEventListener("click", () => setDashboardTab(tab.dataset.dashboardTab)));
   $("model-search").addEventListener("input", renderCatalogue); $("model-category").addEventListener("change", renderCatalogue); elements.refresh.addEventListener("click", refresh);
+  const requestPowerAction = (action, label) => {
+    if (!window.confirm(`Are you sure you want to ${label} the remote server?`)) return;
+    window.api.powerAction(action).then(() => showToast(`${label[0].toUpperCase()}${label.slice(1)} requested.`)).catch(showError);
+  };
+  $("restart-server").addEventListener("click", () => requestPowerAction("restart", "reboot"));
+  $("shutdown-server").addEventListener("click", () => requestPowerAction("shutdown", "shutdown"));
   $("start-chat")?.addEventListener("click", () => { $("chat-panel").hidden = false; $("chat-prompt").focus(); });
   window.api.onDeploymentLog(appendDeploymentLog); window.api.onInstallProgress(appendDeploymentLog); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });

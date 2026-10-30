@@ -333,16 +333,43 @@ const parseNetworkRate = (output) => {
   return Math.round((after - before) * 10);
 };
 
+function parseDiskTelemetry(output = "", filesystemOutput = "") {
+  const fallback = { readBytesPerSecond: null, writeBytesPerSecond: null, filesystems: [] };
+  try {
+    const values = String(output).trim().split(/\s+/).map(Number);
+    const readSectors = values[2] - values[0];
+    const writeSectors = values[3] - values[1];
+    const filesystems = String(filesystemOutput).split(/\r?\n/).slice(1).map((line) => {
+      const columns = line.trim().split(/\s+/);
+      if (columns.length < 6 || !/^\d+$/.test(columns[1])) return null;
+      const totalBytes = Number(columns[1]);
+      const usedBytes = Number(columns[2]);
+      const availableBytes = Number(columns[3]);
+      const usagePercent = Number.parseInt(columns[4], 10);
+      if (![totalBytes, usedBytes, availableBytes, usagePercent].every(Number.isFinite)) return null;
+      return { filesystem: columns[0], totalBytes, usedBytes, availableBytes, usagePercent, mount: columns.slice(5).join(" ") };
+    }).filter(Boolean);
+    return {
+      readBytesPerSecond: Number.isFinite(readSectors) ? Math.max(0, readSectors * 512 * 10) : null,
+      writeBytesPerSecond: Number.isFinite(writeSectors) ? Math.max(0, writeSectors * 512 * 10) : null,
+      filesystems
+    };
+  } catch (error) {
+    console.warn("Unable to parse remote disk telemetry:", error.message);
+    return fallback;
+  }
+}
+
 const getTelemetry = async () => {
   if (!sshClient) throw new Error("No SSH connection is active.");
-  const telemetryCommand = "printf '__TEMP__\\n'; if command -v vcgencmd >/dev/null 2>&1; then vcgencmd measure_temp; else for f in /sys/class/thermal/thermal_zone*/temp; do [ -r \"$f\" ] && awk '{ printf \"%.1f C\\n\", $1 / 1000 }' \"$f\" && break; done; fi; printf '__CPU__\\n'; read_cpu() { awk '/^cpu / { print $2+$3+$4+$5+$6+$7+$8, $5+$6 }' /proc/stat; }; before=$(read_cpu); sleep 0.1; after=$(read_cpu); printf '%s %s\\n' $before $after; printf '__MEM__\\n'; free -m; printf '__NET__\\n'; read_net() { awk 'NR > 2 && /:/ { gsub(\":\", \"\", $1); total += $2 + $10 } END { print total + 0 }' /proc/net/dev; }; before=$(read_net); sleep 0.1; after=$(read_net); printf '%s %s\\n' $before $after";
+  const telemetryCommand = "printf '__TEMP__\\n'; if command -v vcgencmd >/dev/null 2>&1; then vcgencmd measure_temp; else for f in /sys/class/thermal/thermal_zone*/temp; do [ -r \"$f\" ] && awk '{ printf \"%.1f C\\n\", $1 / 1000 }' \"$f\" && break; done; fi; printf '__CPU__\\n'; read_cpu() { awk '/^cpu / { print $2+$3+$4+$5+$6+$7+$8, $5+$6 }' /proc/stat; }; before=$(read_cpu); sleep 0.1; after=$(read_cpu); printf '%s %s\\n' $before $after; printf '__MEM__\\n'; free -m; printf '__NET__\\n'; read_net() { awk 'NR > 2 && /:/ { gsub(\":\", \"\", $1); total += $2 + $10 } END { print total + 0 }' /proc/net/dev; }; before=$(read_net); sleep 0.1; after=$(read_net); printf '%s %s\\n' $before $after; printf '__DISK__\\n'; read_disk() { awk '$3 ~ /^(sd[a-z]|nvme[0-9]+n[0-9]+|vd[a-z])$/ { read += $6; write += $10 } END { print read, write }' /proc/diskstats; }; before=$(read_disk); sleep 0.1; after=$(read_disk); printf '%s %s\\n' $before $after; printf '__FS__\\n'; df -P -B1 -x tmpfs -x devtmpfs 2>/dev/null || df -P";
   const result = await executeRemoteResult(telemetryCommand, { timeoutMs: 10000 });
   const remoteStatus = remoteStatusCache.value || {
     docker: { dockerAvailable: false, containers: [], error: "Docker status is synchronizing." },
     ollama: { models: [] }
   };
   void getRemoteStatus().catch((error) => console.warn("Remote service status sync failed:", error.message));
-  const sections = result.stdout.split(/__(TEMP|CPU|MEM|NET)__\r?\n/);
+  const sections = String(result.stdout || "").split(/__(TEMP|CPU|MEM|NET|DISK|FS)__\r?\n/);
   const section = (name) => {
     const index = sections.indexOf(name);
     return index >= 0 ? (sections[index + 1] || "").trim() : "";
@@ -351,6 +378,8 @@ const getTelemetry = async () => {
   const cpuOutput = section("CPU");
   const memoryOutput = section("MEM");
   const networkOutput = section("NET");
+  const diskOutput = section("DISK");
+  const filesystemOutput = section("FS");
   const memoryResult = memoryOutput ? { status: "fulfilled", value: memoryOutput } : { status: "rejected" };
   const temperatureResult = temperatureOutput ? { status: "fulfilled", value: temperatureOutput } : { status: "rejected" };
   const cpuResult = cpuOutput ? { status: "fulfilled", value: cpuOutput } : { status: "rejected" };
@@ -369,6 +398,7 @@ const getTelemetry = async () => {
     cpuError: temperatureResult.status === "rejected" ? "CPU temperature unavailable" : null,
     cpuUsagePercent: cpuResult.status === "fulfilled" ? parseCpuUsage(cpuOutput) : null,
     networkBytesPerSecond: networkResult.status === "fulfilled" ? parseNetworkRate(networkOutput) : null,
+    disk: parseDiskTelemetry(diskOutput, filesystemOutput),
     memory,
     memoryError: memory ? null : "RAM usage unavailable",
     docker: remoteStatus.docker,
@@ -377,6 +407,7 @@ const getTelemetry = async () => {
     ollama: remoteStatus.ollama,
     environment: environmentStatus
   };
+
 };
 
 const parseUnsignedInteger = (value) => {
@@ -552,13 +583,24 @@ ipcMain.handle("ssh:deploy-service", async (event, configuration) => {
     if (!event.sender.isDestroyed()) event.sender.send("ssh:deployment-log", { jobId, type: "error", data: error.message });
   });
 
-  ipcMain.handle("ssh:remove-model", async (_event, model) => {
-    if (!deploymentModel(model)) throw new Error("Invalid AI model name.");
-    await executeRemote(`ollama rm ${shellQuote(model)}`, { timeoutMs: 120000 });
-    remoteStatusCache.expiresAt = 0;
-    return { model, removed: true };
-  });
   return { jobId, started: true };
+});
+
+ipcMain.handle("ssh:remove-model", async (_event, model) => {
+  if (!deploymentModel(model)) throw new Error("Invalid AI model name.");
+  await executeRemote(`ollama rm ${shellQuote(model)}`, { timeoutMs: 120000 });
+  remoteStatusCache.expiresAt = 0;
+  return { model, removed: true };
+});
+
+ipcMain.handle("ssh:power-action", async (_event, action) => {
+  const commands = { restart: "sudo -n reboot", shutdown: "sudo -n shutdown -h now" };
+  if (!commands[action]) throw new Error("Invalid power action.");
+  const password = sshManager.getCachedSudoPassword();
+  if (!password) throw new Error("A sudo password is required for remote power management.");
+  const result = await executeRemoteResult(`sudo -S -p '' ${action === "restart" ? "reboot" : "shutdown -h now"}`, { input: `${password}\n`, timeoutMs: 15000 });
+  if (result.code !== 0 && result.stderr) throw new Error(result.stderr);
+  return { action, requested: true };
 });
 
 ipcMain.handle("ssh:restart-container", async (_event, containerName) => {

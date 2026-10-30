@@ -47,6 +47,8 @@ h1 { font-size: clamp(26px, 4vw, 32px); letter-spacing: -.035em; line-height: 1.
 .button-primary:hover:not(:disabled) { background: var(--accent-dark); }
 .button-secondary { background: var(--surface); border-color: var(--border-strong); color: #475569; }
 .button-secondary:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; color: var(--text); }
+.button-danger { background: #b91c1c; color: #fff; }
+.button-danger:hover:not(:disabled) { background: #991b1b; }
 .button-full { min-height: 44px; width: 100%; }
 .button-small { font-size: 12px; min-height: 32px; padding: 0 11px; }
 .button-spinner { animation: spin .75s linear infinite; border: 2px solid rgba(255,255,255,.4); border-radius: 999px; border-top-color: white; display: none; height: 15px; width: 15px; }
@@ -123,7 +125,19 @@ h1 { font-size: clamp(26px, 4vw, 32px); letter-spacing: -.035em; line-height: 1.
 .model-card-meta { color: var(--subtle); display: block; font-size: 11px; margin-top: 10px; }
 .model-tags, .model-modal-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
 .model-tag { background: #f1f5f9; border-radius: 4px; color: #475569; font-size: 10px; padding: 4px 6px; }
+.compatibility-badge { border-radius: 5px; display: inline-block; font-size: 10px; font-weight: 750; margin-top: 12px; padding: 5px 7px; }
+.compatibility-full { background: #dcfce7; color: #166534; }
+.compatibility-slow { background: #fef3c7; color: #92400e; }
+.compatibility-incompatible { background: #fee2e2; color: #991b1b; }
+.compatibility-unknown { background: #f1f5f9; color: var(--muted); }
 .model-card-actions { border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
+.storage-panel { margin-top: 24px; }
+.storage-list { display: grid; gap: 14px; padding: 20px 24px 24px; }
+.storage-item { border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+.storage-heading, .storage-meta { align-items: center; display: flex; justify-content: space-between; gap: 12px; }
+.storage-heading { font-size: 13px; }
+.storage-heading span, .storage-meta { color: var(--muted); font-size: 11px; }
+.storage-meta { margin-top: 9px; }
 .model-modal-card { max-height: min(720px, 90vh); max-width: 580px; overflow: auto; }
 .spec-list { display: grid; gap: 0 16px; grid-template-columns: 1fr 2fr; margin-top: 22px; }
 .spec-list dt, .spec-list dd { border-bottom: 1px solid var(--border); font-size: 12px; margin: 0; padding: 10px 0; }
@@ -150,7 +164,7 @@ h1 { font-size: clamp(26px, 4vw, 32px); letter-spacing: -.035em; line-height: 1.
 .status-dot--neutral { background: #64748b; }
 .dashboard-layout { margin: 0 auto; max-width: 1240px; padding: 48px clamp(20px, 4vw, 56px) 72px; }
 .dashboard-heading { align-items: flex-end; display: flex; justify-content: space-between; margin-bottom: 28px; }
-.metric-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); margin-bottom: 24px; }
+.metric-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, 1fr); margin-bottom: 24px; }
 .metric-card, .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
 .metric-card { min-height: 154px; padding: 22px; }
 .metric-label { color: var(--muted); font-size: 13px; font-weight: 600; }

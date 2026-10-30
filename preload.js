@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("api", Object.freeze({
   initializeEnvironment: () => ipcRenderer.invoke("ssh:initialize-environment"),
   deployService: (configuration) => ipcRenderer.invoke("ssh:deploy-service", configuration),
   removeModel: (model) => ipcRenderer.invoke("ssh:remove-model", model),
+  powerAction: (action) => ipcRenderer.invoke("ssh:power-action", action),
   sendChatPrompt: (model, prompt) => ipcRenderer.invoke("ssh:chat", { model, prompt }),
   onChatChunk: (listener) => {
     const handler = (_event, payload) => listener(payload);
