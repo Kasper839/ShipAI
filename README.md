@@ -1,13 +1,12 @@
 # ShipAI
 
+[![GitHub Downloads](https://img.shields.io/github/downloads/Kasper839/ShipAI/total?style=for-the-badge&color=blue)](https://github.com/Kasper839/ShipAI/releases)
+
 ## Private infrastructure control for Linux AI servers
 
 **ShipAI is a private-by-design Electron desktop control plane for remote Linux server management, Docker telemetry, and hardware-aware Ollama model deployment over SSH.** Connect to a host, understand its live capacity, operate its AI infrastructure, and deploy a model that fits—without sending your infrastructure or prompts through a hosted control plane.
 
-[![License](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/Kasper839/ShipAI?display_name=tag&sort=semver&color=2563eb)](https://github.com/Kasper839/ShipAI/releases)
-[![Electron](https://img.shields.io/badge/Electron-38.x-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![SSH2](https://img.shields.io/badge/SSH2-1.16.x-111827?logo=openssh&logoColor=white)](https://github.com/mscdex/ssh2)
+[![License](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/Kasper839/ShipAI?display_name=tag&sort=semver&color=2563eb)](https://github.com/Kasper839/ShipAI/releases) [![Electron](https://img.shields.io/badge/Electron-38.x-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/) [![SSH2](https://img.shields.io/badge/SSH2-1.16.x-111827?logo=openssh&logoColor=white)](https://github.com/mscdex/ssh2)
 
 > **Your server. Your models. Your session.**
 >
