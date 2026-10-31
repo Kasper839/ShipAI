@@ -472,10 +472,6 @@ const getTelemetry = async () => {
     return index >= 0 ? (sections[index + 1] || "").trim() : "";
   };
 
-  const getInstalledModels = async () => {
-    const status = await getRemoteStatus();
-    return status.ollama.models;
-  };
   const temperatureOutput = section("TEMP");
   const cpuOutput = section("CPU");
   const memoryOutput = section("MEM");
@@ -510,6 +506,11 @@ const getTelemetry = async () => {
     environment: environmentStatus
   };
 
+};
+
+const getInstalledModels = async () => {
+  const status = await getRemoteStatus();
+  return status.ollama.models;
 };
 
 const parseUnsignedInteger = (value) => {
