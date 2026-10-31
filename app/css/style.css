@@ -95,7 +95,9 @@ h1 { font-size: clamp(26px, 4vw, 32px); letter-spacing: -.035em; line-height: 1.
 .chat-form input { background: #0f172a; border: 1px solid #475569; border-radius: 7px; color: #f8fafc; min-height: 38px; padding: 0 11px; width: 100%; }
 .charts-panel { overflow: hidden; }
 .chart-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); padding: 0 24px 24px; }
-.chart-card { border: 1px solid var(--border); border-radius: 8px; min-height: 160px; padding: 16px; }
+.chart-card { background: linear-gradient(145deg, #172033, #0f172a); border: 1px solid #26344d; border-radius: 12px; box-shadow: 0 12px 28px rgba(15, 23, 42, .12); min-height: 160px; padding: 16px; }
+.chart-card .chart-title { color: #94a3b8; }
+.chart-card .chart-title strong { color: #f8fafc; font-size: 16px; letter-spacing: -.02em; }
 .chart-title { color: var(--muted); font-size: 12px; }
 .chart-title strong { color: var(--text); font-size: 14px; }
 .info-tooltip { align-items: center; border: 1px solid var(--border-strong); border-radius: 50%; color: var(--muted); cursor: help; display: inline-flex; font-size: 10px; height: 16px; justify-content: center; margin-left: 6px; width: 16px; }

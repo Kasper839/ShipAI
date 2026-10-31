@@ -366,6 +366,7 @@ const ensureDocker = async () => {
     const result = await executeRemoteResult("sh -s", { input: dockerInitScript, timeoutMs: 300000 });
     const initialization = parseDockerInitialization(result);
     remoteStatusCache = { expiresAt: 0, value: null, pending: null };
+    await getRemoteStatus();
     return initialization;
   })().catch((error) => {
     console.warn("[Docker] self-healing probe failed:", error.message);
@@ -465,11 +466,15 @@ const getTelemetry = async () => {
     docker: { dockerAvailable: false, containers: [], error: "Docker status is synchronizing." },
     ollama: { models: [] }
   };
-  void getRemoteStatus().catch((error) => console.warn("Remote service status sync failed:", error.message));
   const sections = String(result.stdout || "").split(/__(TEMP|CPU|MEM|NET|DISK|FS)__\r?\n/);
   const section = (name) => {
     const index = sections.indexOf(name);
     return index >= 0 ? (sections[index + 1] || "").trim() : "";
+  };
+
+  const getInstalledModels = async () => {
+    const status = await getRemoteStatus();
+    return status.ollama.models;
   };
   const temperatureOutput = section("TEMP");
   const cpuOutput = section("CPU");
@@ -673,6 +678,7 @@ ipcMain.handle("ssh:get-telemetry", async () => {
 });
 
 ipcMain.handle("ssh:check-hardware", async () => getHardware());
+ipcMain.handle("ssh:installed-models", async () => getInstalledModels());
 ipcMain.handle("ssh:initialize-environment", async () => initializeEnvironment());
 ipcMain.handle("ssh:ensure-docker", async () => ensureDocker());
 ipcMain.handle("ssh:chat", async (event, request) => {

@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("api", Object.freeze({
   getTelemetry: () => ipcRenderer.invoke("ssh:telemetry"),
   getTelemetrySafe: () => ipcRenderer.invoke("ssh:get-telemetry"),
   checkHardware: () => ipcRenderer.invoke("ssh:check-hardware"),
+  getInstalledModels: () => ipcRenderer.invoke("ssh:installed-models"),
   ensureDocker: () => ipcRenderer.invoke("ssh:ensure-docker"),
   initializeEnvironment: () => ipcRenderer.invoke("ssh:initialize-environment"),
   deployService: (configuration) => ipcRenderer.invoke("ssh:deploy-service", configuration),

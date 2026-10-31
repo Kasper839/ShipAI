@@ -14,6 +14,16 @@
     chartNetworkValue: $("chart-network-value"), chartDiskValue: $("chart-disk-value"),
     storageList: $("storage-list")
   };
+  const refreshInstalledModels = async () => {
+    try {
+      const models = await window.api.getInstalledModels();
+      installedModels = Array.isArray(models) ? models : [];
+      installedModelsLoaded = true;
+      renderCatalogue();
+    } catch (error) {
+      console.warn("Unable to refresh installed Ollama models:", error.message);
+    }
+  };
   const history = { cpu: [], ram: [], network: [], disk: [] };
   let refreshInFlight = false;
   let refreshTimer;
@@ -21,6 +31,7 @@
   let hardware = null;
   let catalogue = [];
   let installedModels = [];
+  let installedModelsLoaded = false;
   let chatModel = null;
   let chatResponse = null;
   const taskTabs = new Map();
@@ -50,7 +61,7 @@
     tab.setAttribute("aria-selected", "true");
     tab.setAttribute("role", "tab");
     tab.setAttribute("tabindex", "0");
-    tab.innerHTML = `<span>AI: ${model.name}</span><button class="temporary-tab-close" type="button" aria-label="Close ${model.name} task">×</button>`;
+    tab.innerHTML = `<span>AI Chat: ${model.name}</span><button class="temporary-tab-close" type="button" aria-label="Close ${model.name} task">×</button>`;
     const view = document.createElement("section");
     view.className = "dashboard-view model-task-view is-active";
     view.dataset.dashboardView = taskId;
@@ -118,6 +129,7 @@
     document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => { const active = tab.dataset.dashboardTab === name; tab.classList.toggle("is-active", active); tab.setAttribute("aria-selected", String(active)); });
     document.querySelectorAll("[data-dashboard-view]").forEach((view) => { const active = view.dataset.dashboardView === name; view.hidden = !active; view.classList.toggle("hidden", !active); });
     if (name === "overview" || name === "docker") void ensureDockerAccess();
+    if (name === "marketplace") void refreshInstalledModels();
   };
   const addHistoryPoint = (key, value) => { if (Number.isFinite(value)) history[key].push(value); if (history[key].length > 30) history[key].shift(); };
   const renderChart = (id, values, color, min = null, max = null) => {
@@ -128,7 +140,9 @@
     }
     const lower = min ?? Math.min(...values); const upper = max ?? Math.max(...values); const range = upper - lower || 1;
     const points = values.map((value, index) => `${values.length === 1 ? 160 : (index / (values.length - 1)) * 320},${96 - ((value - lower) / range) * 78}`).join(" ");
-    chart.innerHTML = `<path d="M 0 96 H 320 M 0 57 H 320 M 0 18 H 320" stroke="#e2e8f0" stroke-width="1" fill="none"/><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    const gradientId = `${id}-gradient`;
+    const areaPoints = `0,96 ${points} 320,96`;
+    chart.innerHTML = `<defs><linearGradient id="${gradientId}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".32"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="M 0 96 H 320 M 0 57 H 320 M 0 18 H 320" stroke="#334155" stroke-width="1" fill="none"/><polygon points="${areaPoints}" fill="url(#${gradientId})"/><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>`;
   };
 
   const runDockerAction = async (action, container, button) => {
@@ -235,7 +249,7 @@
   };
   const removeModel = async (model, button) => {
     button.disabled = true;
-    try { await window.api.removeModel(model.ollama); showToast(`${model.name} removed`); await refresh(); }
+    try { await window.api.removeModel(model.ollama); await refreshInstalledModels(); showToast(`${model.name} removed`); }
     catch (error) { showError(error); button.disabled = false; }
   };
   const runModel = async (model, button) => {
@@ -268,12 +282,13 @@
         const performance = card.querySelector(".model-performance"); performance.textContent = model.vram || `~${model.minimum?.vram || "N/A"} VRAM`; performance.title = fit.reason; const run = card.querySelector(".model-run"); const download = card.querySelector(".model-download"); const remove = card.querySelector(".model-remove"); download.disabled = Boolean(installed); remove.disabled = !installed; run.addEventListener("click", () => runModel(model, run)); download.addEventListener("click", () => deployModel(model, download)); remove.addEventListener("click", () => removeModel(model, remove)); card.querySelector(".model-card-main").addEventListener("click", () => openModelDetails(model)); grid.append(card);
       }); root.append(section);
     });
-    $("catalogue-count").textContent = `${catalogue.length}`; $("installed-count").textContent = `${installedModels.length} installed in Ollama`;
+    $("catalogue-count").textContent = `${catalogue.length}`; $("installed-count").textContent = installedModelsLoaded ? `${installedModels.length} installed in Ollama` : "Select this tab to check Ollama";
   };
   const updateModelStatus = (models) => {
     const previous = installedModels.map((model) => model.name).sort().join("|");
     const next = models.map((model) => model.name).sort().join("|");
     installedModels = models;
+    installedModelsLoaded = true;
     if (catalogue.length && previous !== next) renderCatalogue();
   };
   const loadCatalogue = async () => {
@@ -301,7 +316,7 @@
       if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); elements.chartNetworkValue.textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
       if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); elements.chartRamValue.textContent = `${telemetry.memory.usagePercent}%`; }
       if (telemetry.disk) { const diskRate = (telemetry.disk.readBytesPerSecond || 0) + (telemetry.disk.writeBytesPerSecond || 0); addHistoryPoint("disk", diskRate); elements.chartDiskValue.textContent = `${(diskRate / 1024 / 1024).toFixed(1)} MB/s`; renderStorage(telemetry.disk); }
-      renderChart("cpu-chart", history.cpu, "#4f46e5", 0, 100); renderChart("ram-chart", history.ram, "#0f766e", 0, 100); renderChart("network-chart", history.network, "#b45309"); renderChart("disk-chart", history.disk, "#db2777"); renderDockerStatus(telemetry.docker); renderEnvironmentStatus(telemetry.environment); updateModelStatus(telemetry.ollama?.models || []); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
+      renderChart("cpu-chart", history.cpu, "#818cf8", 0, 100); renderChart("ram-chart", history.ram, "#2dd4bf", 0, 100); renderChart("network-chart", history.network, "#f59e0b"); renderChart("disk-chart", history.disk, "#f472b6"); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
     } catch (error) { showError(error); } finally { elements.refresh.disabled = false; refreshInFlight = false; }
   };
 
@@ -309,7 +324,18 @@
     window.api.onChatChunk((payload) => { if (payload.requestId) return; if (payload.type === "token" && chatResponse) chatResponse.textContent += payload.data; if (payload.type === "error" && chatResponse) chatResponse.textContent += `\nError: ${payload.data}`; if (payload.type === "done" || payload.type === "error") $("chat-memory").textContent = "Idle"; $("chat-messages").scrollTop = $("chat-messages").scrollHeight; });
     $("chat-form").addEventListener("submit", async (event) => { event.preventDefault(); if (!chatModel) return; const input = $("chat-prompt"); const prompt = input.value.trim(); if (!prompt) return; const messages = $("chat-messages"); const user = document.createElement("div"); user.className = "chat-message chat-message--user"; user.textContent = prompt; messages.append(user); chatResponse = document.createElement("div"); chatResponse.className = "chat-message chat-message--assistant"; messages.append(chatResponse); input.value = ""; $("chat-send").disabled = true; $("chat-memory").textContent = "Responding"; try { await window.api.sendChatPrompt(chatModel, prompt); } catch (error) { chatResponse.textContent = `Error: ${error.message}`; } finally { $("chat-send").disabled = false; $("chat-memory").textContent = "Idle"; } });
   };
-  document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => tab.addEventListener("click", () => setDashboardTab(tab.dataset.dashboardTab)));
+  $("dashboard-tabs").addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-dashboard-tab]");
+    if (!tab || event.target.closest(".temporary-tab-close")) return;
+    setDashboardTab(tab.dataset.dashboardTab);
+  });
+  $("dashboard-tabs").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const tab = event.target.closest("[data-dashboard-tab]");
+    if (!tab || event.target.closest(".temporary-tab-close")) return;
+    event.preventDefault();
+    setDashboardTab(tab.dataset.dashboardTab);
+  });
   $("model-search").addEventListener("input", renderCatalogue); $("model-category").addEventListener("change", renderCatalogue); $("custom-model-form").addEventListener("submit", downloadCustomModel); elements.refresh.addEventListener("click", refresh);
   const requestPowerAction = (action, label) => {
     if (!window.confirm(`Are you sure you want to ${label} the remote server?`)) return;
@@ -318,6 +344,6 @@
   $("restart-server").addEventListener("click", () => requestPowerAction("restart", "reboot"));
   $("shutdown-server").addEventListener("click", () => requestPowerAction("shutdown", "shutdown"));
   $("start-chat")?.addEventListener("click", () => { $("chat-panel").hidden = false; $("chat-prompt").focus(); });
-  window.api.onDeploymentLog((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); } }); window.api.onChatChunk(handleTaskChatChunk); window.api.onConnectionState((payload) => { showError(new Error(payload.reason || "SSH connection lost.")); window.clearInterval(refreshTimer); }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
+  window.api.onDeploymentLog((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onChatChunk(handleTaskChatChunk); window.api.onConnectionState((payload) => { showError(new Error(payload.reason || "SSH connection lost.")); window.clearInterval(refreshTimer); }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();
