@@ -1,48 +1,175 @@
 # ShipAI
 
-## High-Performance Remote Server Management & Local AI Marketplace
+## Private infrastructure control for Linux AI servers
 
-ShipAI is an Electron desktop control plane for managing Linux AI infrastructure over SSH. Monitor a remote host in real time, operate AI-focused Docker runtimes, and choose Ollama models using hardware-aware compatibility guidance—all from one private workspace.
+**ShipAI is a private-by-design Electron desktop control plane for remote Linux server management, Docker telemetry, and hardware-aware Ollama model deployment over SSH.** Connect to a host, understand its live capacity, operate its AI infrastructure, and deploy a model that fits—without sending your infrastructure or prompts through a hosted control plane.
 
-[![Version](https://img.shields.io/badge/version-v1.0.0%20Stable-2563eb.svg)](https://github.com/Kasper839/ShipAI/releases)
 [![License](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Electron%20%2F%20Node.js%20%2F%20Linux-64748b.svg)](https://www.electronjs.org/)
-[![Linux hosts](https://img.shields.io/badge/hosts-Arch%20Linux%20%7C%20Ubuntu-e95420.svg)](https://ubuntu.com/)
+[![Release](https://img.shields.io/github/v/release/Kasper839/ShipAI?display_name=tag&sort=semver&color=2563eb)](https://github.com/Kasper839/ShipAI/releases)
+[![Electron](https://img.shields.io/badge/Electron-38.x-47848f?logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![SSH2](https://img.shields.io/badge/SSH2-1.16.x-111827?logo=openssh&logoColor=white)](https://github.com/mscdex/ssh2)
+
+> **Your server. Your models. Your session.**
+>
+> ShipAI connects directly from your desktop to your Linux host over encrypted SSH. It is not a cloud proxy, SaaS dashboard, or telemetry collector.
 
 ## Why ShipAI?
 
-ShipAI keeps server operations and local AI deployment in one focused interface. Credentials remain in the active session, commands are executed on the connected host, and your models and data stay on your infrastructure.
+Running a private AI server often means switching between SSH terminals, Docker commands, hardware utilities, and model documentation. ShipAI brings those workflows into one focused desktop interface while keeping execution on the server you control.
 
 ## Key features
 
-- **Real-time telemetry** — CPU, temperature, RAM, network, disk I/O, and mounted filesystem capacity.
-- **Docker lifecycle management** — Start, stop, restart, and inspect AI infrastructure containers without manually repeating shell commands.
-- **Hardware-aware AI marketplace** — Compare model requirements with remote RAM and VRAM before pulling a model.
-- **Remote power management** — Confirmed remote restart and shutdown controls using the active sudo session.
-- **Ollama model operations** — Pull, remove, and start chats with installed models through a streamed interface.
-- **Private by design** — ShipAI connects directly to your host over SSH; there is no hosted control plane.
+### 📊 Real-time telemetry
+
+- Live CPU utilization and temperature
+- RAM utilization and detected VRAM
+- Network activity, disk I/O, mounted filesystem capacity, and uptime
+- Environment health for Docker and Ollama
+- Hardware inspection before model deployment
+
+### 🧠 Hardware-aware AI marketplace
+
+- Browse models by deployment class and capability
+- Compare quantized minimums and recommended inference capacity with the connected host
+- See clear compatibility states: supported, slower with quantization, or incompatible
+- Pull and remove Ollama models from the remote server
+- Start a streamed chat with installed models
+
+### 🐳 Docker and Ollama management
+
+- Inspect running and stopped containers
+- Start, stop, restart, and view recent container logs
+- Initialize the remote Docker environment when required
+- Install or detect Ollama on the host
+- Pull models and start the Ollama service remotely
+
+### ⚡ Power controls
+
+- Confirmed remote restart and shutdown actions
+- Uses the active sudo session and reports command failures explicitly
+
+### 🔒 Zero-cloud privacy
+
+- Direct SSH connection from the desktop to the target host
+- No ShipAI account, hosted API, or third-party telemetry service
+- SSH and sudo credentials are held in memory for the active session only
+- Prompts, model traffic, and operational commands stay on your infrastructure
 
 ## Supported AI models
 
-The expandable catalogue covers lightweight edge inference through enterprise-scale, multi-GPU systems:
+ShipAI’s catalogue is grouped by the kind of hardware and workload it targets. The names below are the models currently represented in the built-in catalogue; model availability and licensing remain subject to each upstream project’s terms.
 
-- **Edge and workstation:** Phi-3.5 Mini, Phi-4, Gemma 2, Llama 3.1 8B, Qwen 2.5 Coder, and DeepSeek-R1 Distill.
-- **High-performance:** Llama 3.1 70B, CodeLlama, and Qwen 2.5 72B.
-- **Enterprise and agentic:** Kimi K3, GLM-5.2/5.3, DeepSeek V4/R1, and Llama 3.1 405B.
+| Category | Models | Typical use |
+| --- | --- | --- |
+| **Edge** | Phi-3.5 Mini, Phi-4, Llama 3.1 8B, Gemma 2 9B, Gemma 2 27B | Low-cost inference, chat, extraction, summarization, and compact local assistants |
+| **High Performance** | Qwen 2.5 Coder 14B/32B, DeepSeek-R1 Distill 14B/32B, CodeLlama 34B/70B, Llama 3.1 70B | Coding agents, reasoning, long-context work, and workstation or multi-GPU deployments |
+| **Enterprise / Agentic** | Qwen 2.5 72B, Llama 3.1 405B, DeepSeek R1, DeepSeek V4, GLM-5.2, GLM-5.3, Kimi K3 | Large-scale reasoning, tool use, autonomous workflows, and multi-user serving |
 
-Each model includes architecture, context window, capabilities, quantized minimums, recommended inference sizing, and a live compatibility state.
+### How compatibility is calculated
 
-## Quick start
+When you connect, ShipAI reads the target server’s memory and GPU capacity. Each catalogue entry contains:
 
-### Prerequisites
+- A **Q4_K_M minimum** for a practical quantized deployment
+- A **recommended RAM and VRAM profile** for better throughput and multi-user load
+- Model scale, architecture, context window, capabilities, and license metadata
 
-- Node.js and npm
-- A Linux host reachable over SSH
-- Docker installed on the remote host for AI infrastructure containers
-- Ollama installed on the remote host, or permission to install it through ShipAI
-- A user with the required sudo permissions for Docker/Ollama setup and power actions
+ShipAI compares the model’s minimum RAM and VRAM with the detected host. A model is marked **incompatible** when the minimum is not met, or **runs with quantization / slow** when the minimum is met but the recommended profile is not. These are deployment guidance signals—not performance guarantees; thermals, drivers, context length, concurrency, and quantization all affect real-world results.
 
-### Install from source
+## Prerequisites
+
+### Local computer
+
+ShipAI runs on Windows, macOS, and Linux through Electron.
+
+| Platform | Requirements |
+| --- | --- |
+| **Windows** | Windows 10 or later, x64, with network access to the target host |
+| **macOS** | A supported Electron/macOS system with network access to the target host |
+| **Linux** | A supported Electron/Linux desktop environment with network access to the target host |
+| **Building from source** | Node.js 18+ and npm; the repository uses Electron 38 and electron-builder |
+
+The local computer does not need a GPU. GPU memory matters on the **target Linux server** where Ollama runs.
+
+### Target Linux server
+
+- A supported Linux distribution with an SSH server and `systemd`
+- A reachable SSH port (22 by default, or your configured port)
+- An SSH user with permission to run the required operations
+- `sudo` access for Ollama installation, Docker initialization, and power controls
+- Docker Engine and Docker Compose support for container management
+- `curl` for Ollama API discovery and installation
+- A compatible NVIDIA/AMD/Intel GPU stack when GPU acceleration is desired
+- Sufficient disk space for Docker images and model weights
+
+ShipAI can report missing Docker/Ollama components, but it does not remove the need to review your server’s operating system, GPU drivers, storage, and security policy.
+
+## SSH setup
+
+Complete these steps on the **target Linux server** before connecting from ShipAI.
+
+### Ubuntu or Debian
+
+```bash
+sudo apt update
+sudo apt install -y openssh-server
+sudo systemctl enable --now ssh
+sudo systemctl status ssh --no-pager
+```
+
+### Arch Linux
+
+```bash
+sudo pacman -Sy --needed openssh
+sudo systemctl enable --now sshd
+sudo systemctl status sshd --no-pager
+```
+
+### Fedora or RHEL
+
+```bash
+sudo dnf install -y openssh-server
+sudo systemctl enable --now sshd
+sudo systemctl status sshd --no-pager
+```
+
+`enable --now` starts the service immediately and enables it at boot. Use the service name provided by your distribution: Ubuntu and Debian commonly use `ssh`; Arch, Fedora, and RHEL commonly use `sshd`.
+
+### Verify reachability and firewall access
+
+On the server, confirm that SSH is listening:
+
+```bash
+sudo ss -tlnp | grep ':22'
+```
+
+If UFW is enabled, allow SSH before connecting. For a non-default SSH port, replace `22/tcp` with your configured port:
+
+```bash
+sudo ufw allow ssh
+sudo ufw status verbose
+```
+
+From the local computer, test the connection before opening ShipAI:
+
+```bash
+ssh -p 22 operator@192.0.2.10
+```
+
+The command uses the documentation-only address `192.0.2.10` and the example account `operator`; use the actual account and private address configured for your server. Do not expose SSH to the public internet without applying your organization’s hardening policy; prefer a private network, VPN, firewall allowlist, key-based authentication, and a non-root operator account.
+
+## Quick start and installation
+
+### Option A: Windows installer
+
+1. Download the latest `ShipAI Setup *.exe` from the [GitHub Releases page](https://github.com/Kasper839/ShipAI/releases).
+2. Run the installer and launch **ShipAI** from the Start menu.
+3. If Windows Defender SmartScreen displays **Windows protected your PC**, select **More info**, verify that the application is ShipAI from the release you intended to download, and select **Run anyway**.
+4. Enter the target host, SSH port, username, SSH password, and—when needed—the sudo password.
+5. After connection, review the detected hardware and environment status before installing services or models.
+
+> SmartScreen may warn because an unsigned or newly published open-source build has limited reputation. Only bypass the warning when you downloaded the installer from the official ShipAI repository and have verified the release asset.
+
+### Option B: Build from source
 
 ```bash
 git clone https://github.com/Kasper839/ShipAI.git
@@ -51,33 +178,40 @@ npm install
 npm start
 ```
 
-Connect using the host address, SSH port, username, and password. ShipAI then probes the host, reports hardware capability, and opens the AI infrastructure dashboard.
-
-## Development
-
-Run the Electron app locally:
-
-```bash
-npm run dev
-```
-
-Create a distributable package with:
+To create a distributable package for your current platform:
 
 ```bash
 npm run package
 ```
 
-The application entry point is `main/main.js`; the renderer and model catalogue live under `app/`.
+The packaged artifacts are written to `dist/`. The build configuration targets an NSIS installer on Windows, a DMG on macOS, and an AppImage on Linux.
 
-## Security notes
+## First connection
 
-ShipAI is intended for trusted, SSH-accessible infrastructure. Use a dedicated operator account where practical, restrict SSH exposure, and grant only the sudo permissions required by your deployment policy. Never commit credentials, private keys, or host-specific secrets.
+1. Open ShipAI and enter the server hostname or IP address.
+2. Confirm the SSH port (22 unless you changed it), username, and credentials.
+3. Use a dedicated operator account where practical; do not connect as `root`.
+4. Supply a sudo password only when ShipAI needs to install Ollama, initialize Docker, or perform a power action.
+5. Review the telemetry dashboard and hardware compatibility indicators.
+6. Install only the Docker services and Ollama models you intend to run.
+
+## Security model
+
+ShipAI is a desktop client that executes remote operations through the active SSH session. Treat the application and the connected server as a privileged administrative boundary.
+
+- **Credentials:** SSH and sudo credentials are entered for the active session and held in memory. Do not paste credentials into issues, logs, screenshots, shell history, or source files. Disconnect when finished.
+- **Transport:** SSH provides the encrypted transport. Validate host keys and use your normal SSH trust process; do not disable host verification to work around a warning.
+- **Privileges:** Use a least-privilege operator account with only the sudo rules required by your deployment policy. Docker access can effectively grant root-equivalent control on many Linux hosts.
+- **Remote changes:** Docker actions, Ollama installation/model pulls, and reboot/shutdown controls change the target host. Review the selected action and target before confirming it.
+- **Isolation:** Run AI workloads in the Docker/Ollama isolation model appropriate for your environment. Keep model APIs bound to trusted interfaces, protect exposed ports, and apply firewall rules independently of ShipAI.
+- **Data locality:** ShipAI does not provide a hosted relay. Remote commands, telemetry, prompts, model downloads, and responses travel between your desktop and the target infrastructure.
+
+> ShipAI helps make private infrastructure easier to operate; it does not replace SSH hardening, patch management, network segmentation, backups, or your organization’s security review.
 
 ## Contributing
 
-Bug reports, documentation improvements, model catalogue updates, and code contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request.
+Contributions are welcome, including bug fixes, documentation improvements, accessibility work, translations, and model catalogue updates. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request. Never include passwords, private keys, hostnames, IP addresses, or other secrets in reports or screenshots.
 
 ## License
 
 ShipAI is released under the [MIT License](LICENSE).
-
