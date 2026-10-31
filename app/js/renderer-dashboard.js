@@ -8,6 +8,8 @@
     ramProgress: $("ram-progress"),
     refresh: $("refresh-button"), disconnect: $("disconnect-button"), error: $("dashboard-error"),
     environmentWarning: $("environment-warning"), updated: $("charts-status"),
+    dockerStatus: $("docker-status"),
+    containerCount: $("container-count"), tableBody: $("containers-table-body"),
     chartCpuValue: $("chart-cpu-value"), chartRamValue: $("chart-ram-value"),
     chartNetworkValue: $("chart-network-value"), chartDiskValue: $("chart-disk-value"),
     storageList: $("storage-list")
@@ -15,6 +17,7 @@
   const history = { cpu: [], ram: [], network: [], disk: [] };
   let refreshInFlight = false;
   let refreshTimer;
+  let dockerRepairTimer;
   let hardware = null;
   let catalogue = [];
   let installedModels = [];
@@ -26,6 +29,7 @@
   const setDashboardTab = (name) => {
     document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => { const active = tab.dataset.dashboardTab === name; tab.classList.toggle("is-active", active); tab.setAttribute("aria-selected", String(active)); });
     document.querySelectorAll("[data-dashboard-view]").forEach((view) => { const active = view.dataset.dashboardView === name; view.hidden = !active; view.classList.toggle("hidden", !active); });
+    if (name === "overview") void ensureDockerAccess();
   };
   const addHistoryPoint = (key, value) => { if (Number.isFinite(value)) history[key].push(value); if (history[key].length > 30) history[key].shift(); };
   const renderChart = (id, values, color, min = null, max = null) => {
@@ -42,9 +46,10 @@
   const runDockerAction = async (action, container, button) => {
     button.disabled = true;
     try { const result = await window.api.dockerAction(action, container.name); if (action === "logs") { $("deployment-log").hidden = false; $("deployment-log").textContent = result.output || "No logs available."; } }
-    catch (error) { showError(error); } finally { button.disabled = false; }
+    catch (error) { renderDockerRepair({ state: "repairing", message: "Docker is recovering. The action will be available when the daemon is ready." }); void ensureDockerAccess(); } finally { button.disabled = false; }
   };
   const renderContainers = (containers) => {
+    if (!elements.containerCount || !elements.tableBody) return;
     elements.containerCount.textContent = String(containers.filter((container) => container.state === "running").length);
     elements.tableBody.replaceChildren();
     containers.forEach((container) => {
@@ -61,7 +66,37 @@
       elements.tableBody.append(row);
     });
   };
-  const renderDockerStatus = (docker) => { const available = docker?.dockerAvailable === true; elements.dockerWarning.hidden = available; renderContainers(available ? docker.containers : []); };
+  const renderDockerStatus = (docker) => {
+    if (!elements.dockerStatus) return;
+    const available = docker?.dockerAvailable === true;
+    elements.dockerStatus.hidden = available;
+    if (!available) elements.dockerStatus.textContent = docker?.error || "Docker is synchronizing over SSH.";
+    renderContainers(available ? (docker.containers || []) : []);
+  };
+  const renderDockerRepair = (status) => {
+    if (!elements.dockerStatus) return;
+    const ready = status?.state === "ready";
+    elements.dockerStatus.hidden = ready;
+    elements.dockerStatus.textContent = ready ? "" : status?.message || "Docker is synchronizing over SSH.";
+  };
+  const ensureDockerAccess = async () => {
+    renderDockerRepair({ state: "repairing", message: "Checking Docker and repairing access over SSH..." });
+    try {
+      const status = await window.api.ensureDocker();
+      renderDockerRepair(status);
+      if (status.state === "ready") {
+        window.clearTimeout(dockerRepairTimer);
+        await refresh();
+      } else {
+        window.clearTimeout(dockerRepairTimer);
+        dockerRepairTimer = window.setTimeout(() => { void ensureDockerAccess(); }, 5000);
+      }
+    } catch (error) {
+      renderDockerRepair({ state: "repairing", message: "Docker is synchronizing. Retrying automatically." });
+      window.clearTimeout(dockerRepairTimer);
+      dockerRepairTimer = window.setTimeout(() => { void ensureDockerAccess(); }, 5000);
+    }
+  };
   const renderEnvironmentStatus = (environment) => {
     if (!environment || environment.ok === true) { elements.environmentWarning.hidden = true; return; }
     const missing = environment.missingComponents?.length ? ` Missing components: ${environment.missingComponents.join(", ")}.` : "";
@@ -107,23 +142,39 @@
   const deployModel = async (model, button) => {
     button.disabled = true; button.textContent = "Pulling...";
     try { await window.api.deployService({ type: "model", model: model.ollama }); showToast(`Pull started for ${model.name}`); }
-    catch (error) { showError(error); button.disabled = false; button.textContent = "Install / Pull"; }
+    catch (error) { showError(error); button.disabled = false; button.textContent = "Download"; }
   };
   const removeModel = async (model, button) => {
     button.disabled = true;
     try { await window.api.removeModel(model.ollama); showToast(`${model.name} removed`); await refresh(); }
     catch (error) { showError(error); button.disabled = false; }
   };
+  const runModel = async (model, button) => {
+    button.disabled = true;
+    try { await window.api.runModel(model.ollama); showToast(`Spuštění modelu ${model.name} bylo zahájeno.`); }
+    catch (error) { showError(error); }
+    finally { button.disabled = false; }
+  };
+  const downloadCustomModel = async (event) => {
+    event.preventDefault();
+    const input = $("custom-model-name");
+    const button = event.currentTarget.querySelector("button");
+    const model = input.value.trim();
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.\/:@-]{0,127}$/.test(model)) { showError(new Error("Zadejte platný název Ollama modelu.")); return; }
+    button.disabled = true;
+    try { await window.api.deployService({ type: "model", model }); input.value = ""; showToast(`Stahování modelu ${model} bylo zahájeno.`); }
+    catch (error) { showError(error); }
+    finally { button.disabled = false; }
+  };
   const renderCatalogue = () => {
     const query = ($("model-search").value || "").toLowerCase(); const category = $("model-category").value;
-    const visible = catalogue.filter((model) => (category === "all" || model.category === category) && `${model.name} ${model.description} ${model.capabilities.join(" ")}`.toLowerCase().includes(query));
+    const visible = catalogue.filter((model) => (category === "all" || model.category === category) && `${model.name} ${model.description} ${model.capabilities.join(" ")}`.toLowerCase().includes(query)).sort((left, right) => (Number.parseFloat(left.minimum?.vram) || 0) - (Number.parseFloat(right.minimum?.vram) || 0));
     const root = $("model-catalogue"); root.replaceChildren();
     const groups = [...new Set(visible.map((model) => model.category))];
     groups.forEach((group) => { const section = document.createElement("section"); section.className = "model-group"; section.innerHTML = `<div class="model-group-heading"><h3>${group}</h3><span>${visible.filter((model) => model.category === group).length} engines</span></div><div class="model-grid"></div>`; const grid = section.querySelector(".model-grid");
-      visible.filter((model) => model.category === group).forEach((model) => { const installed = modelInstalled(model); const fit = compatibility(model); const card = document.createElement("article"); card.className = "model-card"; card.dataset.modelId = model.id; card.innerHTML = `<button class="model-card-main" type="button"><span class="model-card-top"><span class="model-scale">${model.scale}</span><span class="model-status ${installed ? "is-installed" : ""}">${installed ? "Installed" : "Available"}</span></span><h4></h4><p class="model-description"></p><span class="model-card-meta"></span><span class="model-tags"></span><span class="compatibility-badge compatibility-${fit.state}" title=""></span></button><div class="model-card-actions"><button class="button button-small button-secondary model-details" type="button">View specs</button>${installed ? '<button class="button button-small button-secondary model-chat" type="button">Start Chat</button>' : ""}<button class="button button-small button-primary model-install" type="button"></button></div>`;
+      visible.filter((model) => model.category === group).forEach((model) => { const installed = modelInstalled(model); const fit = compatibility(model); const card = document.createElement("article"); card.className = "model-card"; card.dataset.modelId = model.id; card.innerHTML = `<button class="model-card-main" type="button"><span class="model-card-top"><span class="model-category">${model.category}</span><span class="model-status ${installed ? "is-installed" : ""}">${installed ? "Installed" : "Available"}</span></span><h4></h4><p class="model-description"></p><span class="model-card-meta"></span><span class="model-tags"></span><span class="model-performance" title=""></span></button><div class="model-card-actions"><button class="button button-small button-secondary model-run" type="button">Try / Run</button><button class="button button-small button-primary model-download" type="button">Download</button><button class="button button-small button-secondary model-remove" type="button">Remove</button></div>`;
         card.querySelector("h4").textContent = model.name; card.querySelector(".model-description").textContent = model.description; card.querySelector(".model-card-meta").textContent = `${model.architecture} · ${model.context}`; card.querySelector(".model-tags").innerHTML = model.capabilities.slice(0, 3).map((item) => `<span class="model-tag">${item}</span>`).join("");
-        const badge = card.querySelector(".compatibility-badge"); badge.textContent = fit.label; badge.title = fit.reason; const action = card.querySelector(".model-install"); action.textContent = installed ? "Delete / Remove" : "Install / Pull"; if (installed) action.classList.replace("button-primary", "button-secondary"); if (!installed && fit.state === "incompatible") { action.disabled = true; action.title = fit.reason; }
-        card.querySelector(".model-card-main").addEventListener("click", () => openModelDetails(model)); card.querySelector(".model-details").addEventListener("click", () => openModelDetails(model)); card.querySelector(".model-chat")?.addEventListener("click", () => { chatModel = installed.name; $("chat-panel").hidden = false; $("chat-title").textContent = `Chat with ${model.name}`; $("chat-prompt").focus(); }); action.addEventListener("click", () => installed ? removeModel(model, action) : deployModel(model, action)); grid.append(card);
+        const performance = card.querySelector(".model-performance"); performance.textContent = model.vram || `~${model.minimum?.vram || "N/A"} VRAM`; performance.title = fit.reason; const run = card.querySelector(".model-run"); const download = card.querySelector(".model-download"); const remove = card.querySelector(".model-remove"); download.disabled = Boolean(installed); remove.disabled = !installed; run.addEventListener("click", () => runModel(model, run)); download.addEventListener("click", () => deployModel(model, download)); remove.addEventListener("click", () => removeModel(model, remove)); card.querySelector(".model-card-main").addEventListener("click", () => openModelDetails(model)); grid.append(card);
       }); root.append(section);
     });
     $("catalogue-count").textContent = `${catalogue.length}`; $("installed-count").textContent = `${installedModels.length} installed in Ollama`;
@@ -159,7 +210,7 @@
       if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); elements.chartNetworkValue.textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
       if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); elements.chartRamValue.textContent = `${telemetry.memory.usagePercent}%`; }
       if (telemetry.disk) { const diskRate = (telemetry.disk.readBytesPerSecond || 0) + (telemetry.disk.writeBytesPerSecond || 0); addHistoryPoint("disk", diskRate); elements.chartDiskValue.textContent = `${(diskRate / 1024 / 1024).toFixed(1)} MB/s`; renderStorage(telemetry.disk); }
-      renderChart("cpu-chart", history.cpu, "#4f46e5", 0, 100); renderChart("ram-chart", history.ram, "#0f766e", 0, 100); renderChart("network-chart", history.network, "#b45309"); renderChart("disk-chart", history.disk, "#db2777"); renderEnvironmentStatus(telemetry.environment); updateModelStatus(telemetry.ollama?.models || []); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
+      renderChart("cpu-chart", history.cpu, "#4f46e5", 0, 100); renderChart("ram-chart", history.ram, "#0f766e", 0, 100); renderChart("network-chart", history.network, "#b45309"); renderChart("disk-chart", history.disk, "#db2777"); renderDockerStatus(telemetry.docker); renderEnvironmentStatus(telemetry.environment); updateModelStatus(telemetry.ollama?.models || []); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
     } catch (error) { showError(error); } finally { elements.refresh.disabled = false; refreshInFlight = false; }
   };
 
@@ -168,7 +219,7 @@
     $("chat-form").addEventListener("submit", async (event) => { event.preventDefault(); if (!chatModel) return; const input = $("chat-prompt"); const prompt = input.value.trim(); if (!prompt) return; const messages = $("chat-messages"); const user = document.createElement("div"); user.className = "chat-message chat-message--user"; user.textContent = prompt; messages.append(user); chatResponse = document.createElement("div"); chatResponse.className = "chat-message chat-message--assistant"; messages.append(chatResponse); input.value = ""; $("chat-send").disabled = true; $("chat-memory").textContent = "Responding"; try { await window.api.sendChatPrompt(chatModel, prompt); } catch (error) { chatResponse.textContent = `Error: ${error.message}`; } finally { $("chat-send").disabled = false; $("chat-memory").textContent = "Idle"; } });
   };
   document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => tab.addEventListener("click", () => setDashboardTab(tab.dataset.dashboardTab)));
-  $("model-search").addEventListener("input", renderCatalogue); $("model-category").addEventListener("change", renderCatalogue); elements.refresh.addEventListener("click", refresh);
+  $("model-search").addEventListener("input", renderCatalogue); $("model-category").addEventListener("change", renderCatalogue); $("custom-model-form").addEventListener("submit", downloadCustomModel); elements.refresh.addEventListener("click", refresh);
   const requestPowerAction = (action, label) => {
     if (!window.confirm(`Are you sure you want to ${label} the remote server?`)) return;
     window.api.powerAction(action).then(() => showToast(`${label[0].toUpperCase()}${label.slice(1)} requested.`)).catch(showError);

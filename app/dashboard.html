@@ -44,7 +44,13 @@
           <div class="marketplace-summary"><strong id="catalogue-count">Loading catalogue...</strong><span>models in the library</span><span id="installed-count">Checking Ollama...</span></div>
         </section>
         <section class="panel marketplace-panel" aria-labelledby="catalogue-title">
-          <div class="panel-header"><div><h2 id="catalogue-title">AI model library</h2><p>Ollama-compatible engines, grouped by deployment profile.</p></div><div class="catalogue-tools"><input id="model-search" type="search" placeholder="Search models, capabilities..." aria-label="Search model catalogue"><select id="model-category" aria-label="Filter by deployment profile"><option value="all">All profiles</option></select></div></div>
+          <div class="custom-model-download">
+            <form id="custom-model-form">
+              <label for="custom-model-name">Stáhnout jakýkoliv model z Ollama</label>
+              <div class="custom-model-controls"><input id="custom-model-name" type="text" placeholder="např. codellama:7b, qwen2.5:14b, deepseek-r1" autocomplete="off" required><button class="button button-primary" type="submit">Stáhnout model</button></div>
+            </form>
+          </div>
+          <div class="panel-header"><div><h2 id="catalogue-title">AI model library</h2><p>Ollama-compatible engines, sorted by required memory.</p></div><div class="catalogue-tools"><input id="model-search" type="search" placeholder="Search models, capabilities..." aria-label="Search model catalogue"><select id="model-category" aria-label="Filter by deployment profile"><option value="all">All profiles</option></select></div></div>
           <div id="model-catalogue" class="model-catalogue" aria-live="polite"><p class="catalogue-loading">Loading model definitions...</p></div>
         </section>
         <div id="deployment-log" class="deployment-log" role="log" aria-live="polite" hidden></div>
@@ -60,6 +66,7 @@
       </div>
       <div class="dashboard-view is-active" data-dashboard-view="overview">
         <div id="environment-warning" class="warning-banner" role="alert" hidden></div>
+        <div id="docker-status" class="warning-banner" role="status" aria-live="polite" hidden></div>
         <section class="panel charts-panel" aria-labelledby="charts-title">
           <div class="panel-header">
             <div><h2 id="charts-title">Resource history</h2><p>Live readings collected from the connected server.</p></div>
@@ -87,6 +94,15 @@
         <section class="panel storage-panel" aria-labelledby="storage-title">
           <div class="panel-header"><div><h2 id="storage-title">Storage capacity</h2><p>Used and available space per mounted filesystem.</p></div></div>
           <div id="storage-list" class="storage-list" aria-live="polite"><p class="catalogue-loading">Waiting for disk telemetry...</p></div>
+        </section>
+        <section class="panel docker-panel" aria-labelledby="docker-title">
+          <div class="panel-header"><div><h2 id="docker-title">Docker containers</h2><p>Containers discovered on the connected server.</p></div><strong id="container-count">0 running</strong></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th scope="col">Container</th><th scope="col">Image</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+              <tbody id="containers-table-body"><tr><td colspan="4">Initializing Docker Environment...</td></tr></tbody>
+            </table>
+          </div>
         </section>
         <section class="metric-grid" aria-label="System metrics">
           <article class="metric-card">

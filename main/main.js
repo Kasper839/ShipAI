@@ -6,12 +6,14 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const { Client } = require("ssh2");
 const { SshManager } = require("./sshManager");
 const profileStore = require("./profileStore");
+const dockerInitScript = fs.readFileSync(path.join(__dirname, "docker-init.sh"), "utf8");
 
 let mainWindow;
 let sshClient = null;
 let sshConnection = null;
 const sshManager = new SshManager(() => sshClient);
 let remoteStatusCache = { expiresAt: 0, value: null, pending: null };
+let dockerRepairPending = null;
 let environmentStatus = {
   initialized: false,
   ok: false,
@@ -62,6 +64,8 @@ const executeRemote = async (command, options = {}) => {
   }
   return result.stdout;
 };
+
+const dockerCommand = (argumentsText) => `if docker info >/dev/null 2>&1; then docker ${argumentsText}; else sudo -n docker ${argumentsText}; fi`;
 
 const missingComponentsFrom = (output) => {
   const missing = new Set();
@@ -332,11 +336,58 @@ const parseOllamaModels = (output) => {
   }
 };
 
+const parseDockerInitialization = (result) => {
+  const status = {};
+  String(result.stdout || "").split(/\r?\n/).forEach((line) => {
+    const match = line.match(/^SHIPAI_DOCKER_([A-Z]+)=(.*)$/);
+    if (match) status[match[1].toLowerCase()] = match[2];
+  });
+  const ready = status.state === "ready" || status.state === "ready-sudo";
+  return {
+    state: ready ? "ready" : status.state || "repairing",
+    binary: status.binary || "checking",
+    service: status.service || "checking",
+    socket: status.socket || "checking",
+    elevated: status.state === "ready-sudo",
+    message: ready
+      ? (status.state === "ready-sudo" ? "Docker is ready with elevated access." : "Docker is ready.")
+      : status.state === "unavailable" ? "Docker is not installed or this user cannot install it." : "Docker is being repaired over SSH."
+  };
+};
+
+const ensureDocker = async () => {
+  if (!sshClient) throw new Error("No SSH connection is active.");
+  if (dockerRepairPending) return dockerRepairPending;
+  dockerRepairPending = (async () => {
+    const sudoPassword = sshManager.getCachedSudoPassword();
+    if (sudoPassword) {
+      await executeRemoteResult("sudo -S -p '' -v", { input: `${sudoPassword}\n`, timeoutMs: 10000 });
+    }
+    const result = await executeRemoteResult("sh -s", { input: dockerInitScript, timeoutMs: 300000 });
+    const initialization = parseDockerInitialization(result);
+    remoteStatusCache = { expiresAt: 0, value: null, pending: null };
+    return initialization;
+  })().catch((error) => {
+    console.warn("[Docker] self-healing probe failed:", error.message);
+    return {
+      state: "repairing",
+      binary: "unknown",
+      service: "unknown",
+      socket: "unknown",
+      elevated: false,
+      message: "Docker is synchronizing. Retrying automatically."
+    };
+  }).finally(() => {
+    dockerRepairPending = null;
+  });
+  return dockerRepairPending;
+};
+
 const getRemoteStatus = async () => {
   if (remoteStatusCache.value && remoteStatusCache.expiresAt > Date.now()) return remoteStatusCache.value;
   if (remoteStatusCache.pending) return remoteStatusCache.pending;
   remoteStatusCache.pending = executeRemoteResult(
-    "printf '__DOCKER__\\n'; if command -v docker >/dev/null 2>&1; then docker ps -a --format '{{json .}}'; else printf '__DOCKER_MISSING__\\n'; fi; printf '\\n__OLLAMA__\\n'; if command -v curl >/dev/null 2>&1; then curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags 2>/dev/null || printf '{\"models\":[]}\\n'; else printf '{\"models\":[]}\\n'; fi",
+    "printf '__DOCKER__\\n'; if command -v docker >/dev/null 2>&1; then docker_command=docker; docker info >/dev/null 2>&1 || docker_command='sudo -n docker'; $docker_command ps -a --format '{{json .}}' 2>/dev/null || printf '__DOCKER_UNAVAILABLE__\\n'; else printf '__DOCKER_MISSING__\\n'; fi; printf '\\n__OLLAMA__\\n'; if command -v curl >/dev/null 2>&1; then curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags 2>/dev/null || printf '{\"models\":[]}\\n'; else printf '{\"models\":[]}\\n'; fi",
     { timeoutMs: 15000 }
   ).then((result) => {
     const sections = result.stdout.split(/__(DOCKER|OLLAMA)__\r?\n/);
@@ -349,10 +400,13 @@ const getRemoteStatus = async () => {
       docker: {
         dockerAvailable: !dockerOutput.includes("__DOCKER_MISSING__"),
         containers: parseDockerJson(dockerOutput),
-        error: dockerOutput.includes("__DOCKER_MISSING__") ? "Docker not installed" : null
+        error: dockerOutput.includes("__DOCKER_MISSING__")
+          ? "Docker is not installed."
+          : dockerOutput.includes("__DOCKER_UNAVAILABLE__") ? "Docker is starting or requires elevated access." : null
       },
       ollama: { models: parseOllamaModels(section("OLLAMA")) }
     };
+
     remoteStatusCache = { expiresAt: Date.now() + 2500, value, pending: null };
     return value;
   }).catch((error) => {
@@ -620,6 +674,7 @@ ipcMain.handle("ssh:get-telemetry", async () => {
 
 ipcMain.handle("ssh:check-hardware", async () => getHardware());
 ipcMain.handle("ssh:initialize-environment", async () => initializeEnvironment());
+ipcMain.handle("ssh:ensure-docker", async () => ensureDocker());
 ipcMain.handle("ssh:chat", async (event, request) => {
   if (!request || !deploymentModel(request.model) || typeof request.prompt !== "string" || !request.prompt.trim()) {
     throw new Error("A valid installed model and prompt are required.");
@@ -682,6 +737,14 @@ ipcMain.handle("ssh:remove-model", async (_event, model) => {
   return { model, removed: true };
 });
 
+ipcMain.handle("ssh:run-model", async (_event, model) => {
+  if (!deploymentModel(model)) throw new Error("Invalid AI model name.");
+  const command = `if command -v ollama >/dev/null 2>&1; then nohup ollama run ${shellQuote(model)} >/tmp/shipai-ollama-run.log 2>&1 & else exit 127; fi`;
+  const result = await executeRemoteResult(command, { timeoutMs: 15000 });
+  if (result.code !== 0) throw new Error(result.stderr || "Unable to start the Ollama model.");
+  return { model, started: true };
+});
+
 ipcMain.handle("ssh:power-action", async (_event, action) => {
   const commands = { restart: "sudo -n reboot", shutdown: "sudo -n shutdown -h now" };
   if (!commands[action]) throw new Error("Invalid power action.");
@@ -696,7 +759,7 @@ ipcMain.handle("ssh:restart-container", async (_event, containerName) => {
   if (typeof containerName !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(containerName)) {
     throw new Error("Invalid Docker container name.");
   }
-  await executeRemote(`docker restart -- ${containerName}`);
+  await executeRemote(dockerCommand(`restart -- ${containerName}`));
   return { name: containerName, restartedAt: new Date().toISOString() };
 });
 
@@ -706,8 +769,8 @@ ipcMain.handle("ssh:docker-action", async (_event, request) => {
     throw new Error("Invalid Docker action.");
   }
   const command = request.action === "logs"
-    ? `docker logs --tail 100 ${shellQuote(request.name)}`
-    : `docker ${request.action} -- ${request.name}`;
+    ? dockerCommand(`logs --tail 100 ${shellQuote(request.name)}`)
+    : dockerCommand(`${request.action} -- ${request.name}`);
   if (request.action === "logs") return { name: request.name, action: request.action, output: await executeRemote(command, { timeoutMs: 30000 }) };
   await executeRemote(command, { timeoutMs: 30000 });
   remoteStatusCache.expiresAt = 0;
