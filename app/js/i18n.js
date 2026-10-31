@@ -45,12 +45,11 @@
     installed: "Installed", available: "Available", tryRun: "Try / Run", download: "Download", remove: "Remove",
     pulling: "Pulling...", modelDownload: "Model download", transferring: "Transferring over SSH", calculating: "Calculating transfer size...",
     downloadComplete: "Download complete", modelInstalledRemote: "Model installed on remote host", downloadFailed: "Download failed",
-    newConnection: "New connection", savedProfile: "Saved server profile", delete: "Delete", profileName: "Profile name",
-    optional: "optional", authMethod: "Authentication method", sshPassword: "SSH password", privateKey: "Private key file",
-    privateKeyPath: "Private key path", sudoPassword: "Sudo password", saveProfile: "Save this server profile securely on this computer",
+    newConnection: "New connection", savedProfile: "Saved server profile", delete: "Delete", clearSavedLogin: "Clear saved login", profileName: "Profile name",
+    optional: "optional", sudoPassword: "Sudo password", saveProfile: "Remember this SSH login securely on this computer", savedCredentialUnavailable: "Saved password is unavailable. Enter it again.",
     productionServer: "Production GPU server", sshPasswordPlaceholder: "Enter your SSH password",
     defaultSudo: "Defaults to SSH password", enterHost: "Enter a host or IP address.", enterUsername: "Enter a username.",
-    enterPassword: "Enter your SSH password or choose a saved profile.", enterKey: "Enter a private key path.",
+    enterPassword: "Enter your SSH password or choose a saved profile.",
     validPort: "Use a port between 1 and 65535.", deleteProfileConfirm: "Delete the saved profile?"
   });
   Object.assign(translations.cs, {
@@ -73,9 +72,8 @@
     installed: "Nainstalováno", available: "Dostupné", tryRun: "Vyzkoušet / Spustit", download: "Stáhnout", remove: "Odstranit",
     pulling: "Stahování...", modelDownload: "Stahování modelu", transferring: "Přenos přes SSH", calculating: "Výpočet velikosti přenosu...",
     downloadComplete: "Stahování dokončeno", modelInstalledRemote: "Model nainstalován na vzdáleném hostiteli", downloadFailed: "Stahování selhalo",
-    newConnection: "Nové připojení", savedProfile: "Uložený profil serveru", delete: "Smazat", profileName: "Název profilu",
-    optional: "volitelné", authMethod: "Způsob ověření", sshPassword: "SSH heslo", privateKey: "Soubor privátního klíče",
-    privateKeyPath: "Cesta k privátnímu klíči", sudoPassword: "Sudo heslo", saveProfile: "Bezpečně uložit tento profil serveru v počítači",
+    newConnection: "Nové připojení", savedProfile: "Uložený profil serveru", delete: "Smazat", clearSavedLogin: "Vymazat uložené přihlášení", profileName: "Název profilu",
+    optional: "volitelné", sudoPassword: "Sudo heslo", saveProfile: "Bezpečně zapamatovat toto SSH přihlášení v počítači", savedCredentialUnavailable: "Uložené heslo není dostupné. Zadejte ho znovu.",
     productionServer: "Produkční GPU server", sshPasswordPlaceholder: "Zadejte SSH heslo",
     defaultSudo: "Standardně SSH heslo"
   });

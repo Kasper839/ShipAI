@@ -216,8 +216,6 @@ ShipAI stores profiles in `profiles.json` under Electron’s per-user applicatio
       "host": "192.0.2.10",
       "port": 22,
       "username": "operator",
-      "authType": "password",
-      "keyPath": "",
       "encryptedPassword": "OS-keychain-backed ciphertext",
       "updatedAt": "2026-10-31T00:00:00.000Z"
     }

@@ -34,8 +34,6 @@ const profileForRenderer = (profile) => ({
   host: profile.host,
   port: profile.port,
   username: profile.username,
-  authType: profile.authType,
-  keyPath: profile.keyPath || "",
   hasPassword: Boolean(profile.encryptedPassword),
   updatedAt: profile.updatedAt
 });
@@ -46,17 +44,17 @@ const validateProfile = (profile) => {
   const host = typeof profile.host === "string" ? profile.host.trim() : "";
   const username = typeof profile.username === "string" ? profile.username.trim() : "";
   const port = Number(profile.port);
-  const authType = profile.authType === "key" ? "key" : "password";
   if (!name || name.length > 80) throw new Error("Profile name must be between 1 and 80 characters.");
   if (!host || host.length > 253) throw new Error("Enter a valid host or IP address.");
   if (!username || username.length > 128) throw new Error("Enter a valid username.");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("SSH port must be between 1 and 65535.");
-  if (authType === "key" && (!profile.keyPath || typeof profile.keyPath !== "string")) throw new Error("A private key path is required.");
-  if (authType === "password" && !profile.password && !profile.id) throw new Error("A password is required for a new profile.");
-  return { name, host, username, port, authType, keyPath: authType === "key" ? profile.keyPath.trim() : "" };
+  if (!profile.password && !profile.id) throw new Error("A password is required for a new profile.");
+  return { name, host, username, port };
 };
 
-const listProfiles = () => readStore().profiles.map(profileForRenderer);
+const listProfiles = () => readStore().profiles
+  .filter((profile) => Boolean(profile.encryptedPassword))
+  .map(profileForRenderer);
 
 const saveProfile = (rawProfile) => {
   const input = validateProfile(rawProfile);
@@ -66,7 +64,7 @@ const saveProfile = (rawProfile) => {
   const password = typeof rawProfile.password === "string" && rawProfile.password.length > 0
     ? rawProfile.password
     : null;
-  if (input.authType === "password" && !password && !existing?.encryptedPassword) {
+  if (!password && !existing?.encryptedPassword) {
     throw new Error("A password is required for this profile.");
   }
   if (password && !safeStorage.isEncryptionAvailable()) {
@@ -77,7 +75,7 @@ const saveProfile = (rawProfile) => {
     ...input,
     encryptedPassword: password
       ? safeStorage.encryptString(password).toString("base64")
-      : (input.authType === "password" ? existing?.encryptedPassword : ""),
+      : existing?.encryptedPassword || "",
     updatedAt: new Date().toISOString()
   };
   if (existingIndex >= 0) store.profiles[existingIndex] = profile;
@@ -93,18 +91,15 @@ const getProfileCredentials = (id) => {
     host: profile.host,
     port: profile.port,
     username: profile.username,
-    privateKeyPath: profile.authType === "key" ? profile.keyPath : ""
   };
-  if (profile.authType === "password") {
-    if (!profile.encryptedPassword || !safeStorage.isEncryptionAvailable()) throw new Error("The saved password cannot be decrypted on this computer.");
-    try {
-      const encryptedPassword = typeof profile.encryptedPassword === "string"
-        ? Buffer.from(profile.encryptedPassword, "base64")
-        : Buffer.from(profile.encryptedPassword.data || []);
-      credentials.password = safeStorage.decryptString(encryptedPassword);
-    } catch (error) {
-      throw new Error(`The saved password could not be decrypted: ${error.message}`);
-    }
+  if (!profile.encryptedPassword || !safeStorage.isEncryptionAvailable()) throw new Error("The saved password cannot be decrypted on this computer.");
+  try {
+    const encryptedPassword = typeof profile.encryptedPassword === "string"
+      ? Buffer.from(profile.encryptedPassword, "base64")
+      : Buffer.from(profile.encryptedPassword.data || []);
+    credentials.password = safeStorage.decryptString(encryptedPassword);
+  } catch (error) {
+    throw new Error(`The saved password could not be decrypted: ${error.message}`);
   }
   return credentials;
 };

@@ -32,7 +32,7 @@
               <select id="profile-select" class="form-select">
                 <option value="" data-i18n="newConnection">New connection</option>
               </select>
-              <button id="delete-profile" class="button button-secondary button-small" type="button" data-i18n="delete" disabled>Delete</button>
+              <button id="delete-profile" class="button button-secondary button-small" type="button" data-i18n="clearSavedLogin" disabled>Clear saved login</button>
             </div>
             <p class="field-error" data-error-for="profile-select"></p>
           </div>
@@ -68,27 +68,13 @@
           </div>
 
           <div class="form-field">
-            <label for="auth-type" data-i18n="authMethod">Authentication method</label>
-            <select id="auth-type" class="form-select">
-              <option value="password" data-i18n="sshPassword">SSH password</option>
-              <option value="key" data-i18n="privateKey">Private key file</option>
-            </select>
-          </div>
-
-          <div id="key-field" class="form-field" hidden>
-            <label for="key-path" data-i18n="privateKeyPath">Private key path</label>
-            <input id="key-path" name="keyPath" type="text" autocomplete="off" placeholder="C:\Users\you\.ssh\id_ed25519" />
-            <p class="field-error" data-error-for="key-path"></p>
-          </div>
-
-          <div class="form-field">
             <label for="sudo-password" data-i18n="sudoPassword">Sudo password <span class="field-hint" data-i18n="optional">(optional)</span></label>
             <input id="sudo-password" name="sudoPassword" type="password" autocomplete="current-password" data-i18n-placeholder="defaultSudo" placeholder="Defaults to SSH password" />
             <p class="field-error" data-error-for="sudo-password"></p>
           </div>
 
           <p id="connection-message" class="form-message" role="status" aria-live="polite"></p>
-          <label class="save-profile-control"><input id="save-profile" type="checkbox" checked /> <span data-i18n="saveProfile">Save this server profile securely on this computer</span></label>
+          <label class="save-profile-control"><input id="save-profile" type="checkbox" checked /> <span data-i18n="saveProfile">Remember this SSH login securely on this computer</span></label>
           <button id="connect-button" class="button button-primary button-full" type="submit">
             <span class="button-text" data-i18n="connect">Connect server</span>
             <span class="button-spinner" aria-hidden="true"></span>

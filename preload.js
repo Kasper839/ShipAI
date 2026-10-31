@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("api", Object.freeze({
   connectSSH: (credentials) => ipcRenderer.invoke("ssh-connect", credentials),
   listProfiles: () => ipcRenderer.invoke("profiles:list"),
+  getProfileCredentials: (id) => ipcRenderer.invoke("profiles:credentials", id),
   saveProfile: (profile) => ipcRenderer.invoke("profiles:save", profile),
   deleteProfile: (id) => ipcRenderer.invoke("profiles:delete", id),
   getTelemetry: () => ipcRenderer.invoke("ssh:telemetry"),

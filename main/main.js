@@ -125,8 +125,7 @@ const connectSsh = (credentials) => new Promise((resolve, reject) => {
   console.log("[SSH] connecting", {
     host: credentials.host,
     port: credentials.port,
-    username: credentials.username,
-    authType: credentials.privateKey ? "private-key" : "password"
+    username: credentials.username
   });
   closeSshConnection();
   environmentStatus = {
@@ -150,7 +149,6 @@ const connectSsh = (credentials) => new Promise((resolve, reject) => {
         host: credentials.host,
         port: credentials.port,
         username: credentials.username,
-        authType: credentials.privateKey ? "private-key" : "password",
         error: error instanceof Error ? error.message : String(error)
       });
       cleanupFailedConnection();
@@ -236,12 +234,7 @@ const connectSsh = (credentials) => new Promise((resolve, reject) => {
     readyTimeout: 10000,
     tryKeyboard: false
   };
-  if (credentials.privateKey) {
-    auth.privateKey = credentials.privateKey;
-    if (credentials.passphrase) auth.passphrase = credentials.passphrase;
-  } else {
-    auth.password = credentials.password;
-  }
+  auth.password = credentials.password;
   try {
     client.connect(auth);
   } catch (error) {
@@ -257,16 +250,8 @@ const validateCredentials = (credentials) => {
   if (!host || host.length > 253) throw new Error("Enter a valid host or IP address.");
   if (!username || username.length > 128) throw new Error("Enter a valid username.");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("SSH port must be between 1 and 65535.");
-  if (!credentials.password && !credentials.privateKey && !credentials.privateKeyPath) throw new Error("A password or private key is required.");
-  let privateKey = typeof credentials.privateKey === "string" ? credentials.privateKey : "";
-  if (!privateKey && credentials.privateKeyPath) {
-    try {
-      privateKey = fs.readFileSync(credentials.privateKeyPath, "utf8");
-    } catch (error) {
-      throw new Error(`Unable to read the private key: ${error.message}`);
-    }
-  }
   const password = typeof credentials.password === "string" ? credentials.password : "";
+  if (!password) throw new Error("An SSH password is required.");
   const sudoPassword = typeof credentials.sudoPassword === "string" && credentials.sudoPassword.length > 0
     ? credentials.sudoPassword
     : password;
@@ -274,11 +259,10 @@ const validateCredentials = (credentials) => {
     host,
     port,
     username,
-    authType: privateKey ? "private-key" : "password",
     passwordLength: password.length,
     hasSudoPassword: Boolean(sudoPassword)
   });
-  return { ...credentials, host, username, port, password, privateKey, sudoPassword };
+  return { ...credentials, host, username, port, password, sudoPassword };
 };
 
 const parseTemperature = (output) => {
@@ -302,13 +286,6 @@ const parseMemory = (output) => {
     usagePercent: totalMb > 0 ? Math.round((usedMb / totalMb) * 100) : 0
   };
 };
-
-const parseContainers = (output) => output
-  ? output.split(/\r?\n/).filter(Boolean).map((line) => {
-    const [name, status, ports = ""] = line.split("|");
-    return { name, status, ports };
-  })
-  : [];
 
 const parseDockerJson = (output) => output
   .split(/\r?\n/)
@@ -662,7 +639,6 @@ ipcMain.handle("ssh-connect", async (_event, rawCredentials) => {
       ...rawCredentials,
       port: rawCredentials?.port ?? savedCredentials.port,
       password: rawCredentials?.password || savedCredentials.password,
-      privateKeyPath: rawCredentials?.privateKeyPath || savedCredentials.privateKeyPath
     });
     return await connectSsh(credentials);
   } catch (error) {
@@ -678,6 +654,10 @@ ipcMain.handle("ssh-connect", async (_event, rawCredentials) => {
 });
 
 ipcMain.handle("profiles:list", () => profileStore.listProfiles());
+ipcMain.handle("profiles:credentials", (_event, id) => {
+  if (typeof id !== "string" || !id) throw new Error("A saved profile is required.");
+  return profileStore.getProfileCredentials(id);
+});
 ipcMain.handle("profiles:save", (_event, profile) => profileStore.saveProfile(profile));
 ipcMain.handle("profiles:delete", (_event, id) => profileStore.deleteProfile(id));
 

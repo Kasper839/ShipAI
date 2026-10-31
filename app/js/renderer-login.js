@@ -19,13 +19,6 @@
     if (error) error.textContent = value;
   };
 
-  const setAuthFields = () => {
-    const keyAuth = $("auth-type").value === "key";
-    $("key-field").hidden = !keyAuth;
-    $("password").required = !keyAuth && !selectedProfile?.hasPassword;
-    if (keyAuth) $("password").value = "";
-  };
-
   const renderProfiles = () => {
     profileSelect.replaceChildren(new Option(t("newConnection", "New connection"), ""));
     profiles.forEach((profile) => profileSelect.append(new Option(`${profile.name} — ${profile.username}@${profile.host}`, profile.id)));
@@ -36,14 +29,18 @@
     try {
       profiles = await window.api.listProfiles();
       renderProfiles();
+      if (profiles.length) {
+        profileSelect.value = profiles[0].id;
+        await selectProfile(profiles[0]);
+      }
     } catch (error) {
       message.textContent = `Unable to load saved profiles: ${error.message}`;
       message.classList.add("is-error");
     }
   };
 
-  profileSelect.addEventListener("change", () => {
-    selectedProfile = profiles.find((profile) => profile.id === profileSelect.value) || null;
+  const selectProfile = async (profile) => {
+    selectedProfile = profile || null;
     $("delete-profile").disabled = !selectedProfile;
     if (!selectedProfile) {
       $("profile-name").value = "";
@@ -51,21 +48,29 @@
       $("port").value = "22";
       $("username").value = "";
       $("password").value = "";
-      $("key-path").value = "";
-      $("auth-type").value = "password";
     } else {
       $("profile-name").value = selectedProfile.name;
       $("host").value = selectedProfile.host;
       $("port").value = String(Number.parseInt(String(selectedProfile.port), 10));
       $("username").value = selectedProfile.username;
       $("password").value = "";
-      $("key-path").value = selectedProfile.keyPath || "";
-      $("auth-type").value = selectedProfile.authType;
+      try {
+        const credentials = await window.api.getProfileCredentials(selectedProfile.id);
+        if (selectedProfile.id === profileSelect.value) {
+          $("password").value = typeof credentials.password === "string" ? credentials.password : "";
+        }
+      } catch (error) {
+        console.warn("[Login] Unable to decrypt saved password:", error.message);
+        message.textContent = t("savedCredentialUnavailable", "Saved password is unavailable. Enter it again.");
+        message.classList.add("is-error");
+      }
     }
-    setAuthFields();
+  };
+
+  profileSelect.addEventListener("change", () => {
+    void selectProfile(profiles.find((profile) => profile.id === profileSelect.value) || null);
   });
 
-  $("auth-type").addEventListener("change", setAuthFields);
   $("delete-profile").addEventListener("click", async () => {
     if (!selectedProfile || !window.confirm(`${t("deleteProfileConfirm", "Delete the saved profile?")} "${selectedProfile.name}"`)) return;
     try {
@@ -82,27 +87,21 @@
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const authType = $("auth-type").value;
     const host = $("host").value.trim();
     const port = Number($("port").value);
     const username = $("username").value.trim();
     const password = $("password").value;
-    const keyPath = $("key-path").value.trim();
     const profileName = $("profile-name").value.trim();
     let valid = true;
     [["host", host, t("enterHost", "Enter a host or IP address.")], ["username", username, t("enterUsername", "Enter a username.")]].forEach(([name, value, error]) => {
       setError(name, value ? "" : error);
       if (!value) valid = false;
     });
-    const canUseSavedPassword = selectedProfile && selectedProfile.authType === "password" && selectedProfile.hasPassword;
-    if (authType === "password" && !password && !canUseSavedPassword) {
+    const canUseSavedPassword = selectedProfile?.hasPassword;
+    if (!password && !canUseSavedPassword) {
       setError("password", t("enterPassword", "Enter your SSH password or choose a saved profile."));
       valid = false;
     } else setError("password");
-    if (authType === "key" && !keyPath) {
-      setError("key-path", t("enterKey", "Enter a private key path."));
-      valid = false;
-    } else setError("key-path");
     setError("port", Number.isInteger(port) && port > 0 && port <= 65535 ? "" : t("validPort", "Use a port between 1 and 65535."));
     if (!Number.isInteger(port) || port < 1 || port > 65535) valid = false;
     if (!valid) return;
@@ -118,7 +117,6 @@
         port: Number.parseInt(String(port), 10),
         username,
         password,
-        privateKeyPath: authType === "key" ? keyPath : "",
         sudoPassword: $("sudo-password").value
       };
       console.log("[Login] connecting with profile", {
@@ -126,13 +124,12 @@
         host: activeCredentials.host,
         port: activeCredentials.port,
         username: activeCredentials.username,
-        authType,
         passwordProvided: Boolean(activeCredentials.password),
-        keyPathProvided: Boolean(activeCredentials.privateKeyPath)
       });
       await window.api.connectSSH(activeCredentials);
-      if ($("save-profile").checked && profileName) {
-        await window.api.saveProfile({ id: selectedProfile?.id, name: profileName, host, port, username, authType, keyPath, password });
+      if ($("save-profile").checked) {
+        const savedName = profileName || selectedProfile?.name || `${username}@${host}`;
+        await window.api.saveProfile({ id: selectedProfile?.id, name: savedName, host, port, username, password });
       }
       window.location.assign("dashboard.html");
     } catch (error) {
@@ -144,6 +141,5 @@
     }
   });
 
-  setAuthFields();
   loadProfiles();
 })();
