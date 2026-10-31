@@ -88,7 +88,6 @@
   const setDashboardTab = (name) => {
     document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => { const active = tab.dataset.dashboardTab === name; tab.classList.toggle("is-active", active); tab.setAttribute("aria-selected", String(active)); });
     document.querySelectorAll("[data-dashboard-view]").forEach((view) => { const active = view.dataset.dashboardView === name; view.hidden = !active; view.classList.toggle("hidden", !active); });
-    $("dashboard-heading").hidden = name === "ai-chat";
     document.querySelector(".dashboard-layout").classList.toggle("is-chat-studio", name === "ai-chat");
     $("model-progress").hidden = name === "ai-chat" || $("model-progress").dataset.active !== "true";
     if (name === "overview" || name === "docker") void ensureDockerAccess();

@@ -43,19 +43,11 @@
           <span id="model-progress-value" class="progress-value" style="width: 0%"></span>
         </div>
       </section>
-      <div id="dashboard-heading" class="dashboard-heading" data-dashboard-heading>
-        <div>
-          <div class="section-kicker">Server overview</div>
-          <h1 data-i18n="dashboard">AI infrastructure dashboard</h1>
-          <p class="section-lead" data-i18n="monitor">Monitor host health and manage the runtime behind your AI engines.</p>
-        </div>
-        <button id="refresh-button" class="button button-secondary" type="button" data-i18n="refresh">Refresh data</button>
-      </div>
+      <button id="refresh-button" class="button button-secondary dashboard-refresh-control" type="button" data-i18n="refresh">Refresh data</button>
 
       <div id="dashboard-error" class="error-banner" role="alert" hidden></div>
       <div class="dashboard-view" data-dashboard-view="marketplace" hidden>
         <section class="marketplace-hero">
-          <div><div class="section-kicker">AI engine marketplace</div><h1>Deploy intelligence for your infrastructure</h1><p class="section-lead">Explore models from edge-ready assistants to multi-GPU agentic systems. Every card includes sizing guidance for quantized and full-precision inference.</p></div>
           <div class="marketplace-summary"><strong id="catalogue-count">Loading catalogue...</strong><span>models in the library</span><span id="installed-count">Checking Ollama...</span></div>
         </section>
         <section class="panel marketplace-panel" aria-labelledby="catalogue-title">
@@ -65,7 +57,7 @@
               <div class="custom-model-controls"><input id="custom-model-name" type="text" placeholder="např. codellama:7b, qwen2.5:14b, deepseek-r1" autocomplete="off" required><button class="button button-primary" type="submit">Stáhnout model</button></div>
             </form>
           </div>
-          <div class="panel-header"><div><h2 id="catalogue-title">AI model library</h2><p>Ollama-compatible engines, sorted by required memory.</p></div><div class="catalogue-tools"><input id="model-search" type="search" placeholder="Search models, capabilities..." aria-label="Search model catalogue"><select id="model-category" aria-label="Filter by deployment profile"><option value="all">All profiles</option></select></div></div>
+          <div class="panel-header"><div class="catalogue-tools"><input id="model-search" type="search" placeholder="Search models, capabilities..." aria-label="Search model catalogue"><select id="model-category" aria-label="Filter by deployment profile"><option value="all">All profiles</option></select></div></div>
           <div id="model-catalogue" class="model-catalogue" aria-live="polite"><p class="catalogue-loading">Loading model definitions...</p></div>
         </section>
         <div id="deployment-log" class="deployment-log" role="log" aria-live="polite" hidden></div>
@@ -73,10 +65,7 @@
       <div class="dashboard-view is-active" data-dashboard-view="overview">
         <div id="environment-warning" class="warning-banner" role="alert" hidden></div>
         <section class="panel charts-panel" aria-labelledby="charts-title">
-          <div class="panel-header">
-            <div><h2 id="charts-title">Resource history</h2><p>Live readings collected from the connected server.</p></div>
-            <span id="charts-status" class="updated-label" role="status" aria-live="polite">Waiting for telemetry</span>
-          </div>
+          <div class="panel-header panel-header--status"><span id="charts-status" class="updated-label" role="status" aria-live="polite">Waiting for telemetry</span></div>
           <div class="chart-grid">
             <article class="chart-card">
               <div class="chart-title"><span data-i18n="cpu">CPU usage</span><span class="info-tooltip" title="CPU usage shows how busy the processor is.">i</span><strong id="chart-cpu-value">N/A</strong></div>
@@ -97,7 +86,6 @@
           </div>
         </section>
         <section class="panel storage-panel" aria-labelledby="storage-title">
-          <div class="panel-header"><div><h2 id="storage-title">Storage capacity</h2><p>Used and available space per mounted filesystem.</p></div></div>
           <div id="storage-list" class="storage-list" aria-live="polite"><p class="catalogue-loading">Waiting for disk telemetry...</p></div>
         </section>
         <section class="metric-grid" aria-label="System metrics">
@@ -116,7 +104,7 @@
       <div class="dashboard-view" data-dashboard-view="docker" hidden>
         <div id="docker-status" class="warning-banner" role="status" aria-live="polite">Initializing Docker Environment...</div>
         <section class="panel docker-panel" aria-labelledby="docker-title">
-          <div class="panel-header"><div><h1 id="docker-title">Docker containers</h1><p class="section-lead">Containers discovered on the connected server.</p></div><strong id="container-count">0 running</strong></div>
+          <div class="panel-header panel-header--status"><strong id="container-count">0 running</strong></div>
           <div class="table-wrap">
             <table class="data-table">
               <thead><tr><th scope="col">Container</th><th scope="col">Image</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
@@ -128,7 +116,6 @@
       <div class="dashboard-view chat-studio-view" data-dashboard-view="ai-chat" hidden>
         <section class="chat-studio" aria-labelledby="chat-title">
           <header class="chat-studio-header">
-            <div><h1 id="chat-title">AI Chat</h1></div>
             <div class="chat-studio-actions">
               <label class="chat-model-selector" for="chat-model-select"><span>Installed model</span><select id="chat-model-select" aria-label="Select Installed Model"><option value="">Loading installed models...</option></select></label>
               <span id="chat-memory" class="status-badge status-badge--neutral">Idle</span>
