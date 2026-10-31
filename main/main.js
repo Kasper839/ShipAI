@@ -682,7 +682,7 @@ ipcMain.handle("ssh:chat", async (event, request) => {
   const body = JSON.stringify({ model: request.model, prompt: request.prompt, stream: true });
   let buffer = "";
   const send = (payload) => {
-    if (!event.sender.isDestroyed()) event.sender.send("ssh:chat-chunk", payload);
+    if (!event.sender.isDestroyed()) event.sender.send("ssh:chat-chunk", { requestId: request.requestId || null, ...payload });
   };
   const result = await executeRemoteResult(
     `curl -fsS -N --max-time 1800 http://127.0.0.1:11434/api/generate -H 'Content-Type: application/json' --data ${shellQuote(body)}`,

@@ -15,9 +15,10 @@
         <span class="brand-mark" aria-hidden="true">S</span>
         <span class="brand-name">ShipAI</span>
       </a>
-      <nav class="dashboard-tabs" aria-label="Dashboard sections">
+      <nav id="dashboard-tabs" class="dashboard-tabs" aria-label="Dashboard sections">
         <button class="dashboard-tab is-active" type="button" data-dashboard-tab="overview" aria-selected="true" data-i18n="stats">Statistiky a Docker</button>
         <button class="dashboard-tab" type="button" data-dashboard-tab="marketplace" aria-selected="false" data-i18n="install">Instalace &amp; AI Modely</button>
+        <button class="dashboard-tab" type="button" data-dashboard-tab="docker" aria-selected="false">Docker</button>
       </nav>
       <div class="dashboard-actions">
         <label class="language-control" for="language-select"><span class="sr-only">Language</span><select id="language-select" aria-label="Language"></select></label>
@@ -66,7 +67,6 @@
       </div>
       <div class="dashboard-view is-active" data-dashboard-view="overview">
         <div id="environment-warning" class="warning-banner" role="alert" hidden></div>
-        <div id="docker-status" class="warning-banner" role="status" aria-live="polite" hidden></div>
         <section class="panel charts-panel" aria-labelledby="charts-title">
           <div class="panel-header">
             <div><h2 id="charts-title">Resource history</h2><p>Live readings collected from the connected server.</p></div>
@@ -95,15 +95,6 @@
           <div class="panel-header"><div><h2 id="storage-title">Storage capacity</h2><p>Used and available space per mounted filesystem.</p></div></div>
           <div id="storage-list" class="storage-list" aria-live="polite"><p class="catalogue-loading">Waiting for disk telemetry...</p></div>
         </section>
-        <section class="panel docker-panel" aria-labelledby="docker-title">
-          <div class="panel-header"><div><h2 id="docker-title">Docker containers</h2><p>Containers discovered on the connected server.</p></div><strong id="container-count">0 running</strong></div>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th scope="col">Container</th><th scope="col">Image</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
-              <tbody id="containers-table-body"><tr><td colspan="4">Initializing Docker Environment...</td></tr></tbody>
-            </table>
-          </div>
-        </section>
         <section class="metric-grid" aria-label="System metrics">
           <article class="metric-card">
             <div class="metric-label"><span data-i18n="temp">CPU temperature</span><span class="info-tooltip" title="CPU temperature helps monitor cooling.">i</span></div>
@@ -115,6 +106,18 @@
             <div class="metric-value"><span id="ram-usage">N/A</span><span class="metric-unit">GB / <span id="ram-total">N/A</span> GB</span></div>
             <div class="progress-track" aria-label="RAM usage"><span id="ram-progress" class="progress-value" style="width: 0%"></span></div>
           </article>
+        </section>
+      </div>
+      <div class="dashboard-view" data-dashboard-view="docker" hidden>
+        <div id="docker-status" class="warning-banner" role="status" aria-live="polite">Initializing Docker Environment...</div>
+        <section class="panel docker-panel" aria-labelledby="docker-title">
+          <div class="panel-header"><div><h1 id="docker-title">Docker containers</h1><p class="section-lead">Containers discovered on the connected server.</p></div><strong id="container-count">0 running</strong></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th scope="col">Container</th><th scope="col">Image</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+              <tbody id="containers-table-body"><tr><td colspan="4">Initializing Docker Environment...</td></tr></tbody>
+            </table>
+          </div>
         </section>
       </div>
     </main>

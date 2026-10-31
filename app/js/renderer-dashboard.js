@@ -23,13 +23,101 @@
   let installedModels = [];
   let chatModel = null;
   let chatResponse = null;
+  const taskTabs = new Map();
 
   const showError = (error) => { elements.error.textContent = error.message || "Unable to retrieve server telemetry."; elements.error.hidden = false; };
   const showToast = (message) => { const toast = $("dashboard-toast"); toast.textContent = message; toast.hidden = false; window.setTimeout(() => { toast.hidden = true; }, 2600); };
+  const activateTaskTab = (taskId) => {
+    document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => {
+      const active = tab.dataset.dashboardTab === taskId;
+      tab.classList.toggle("is-active", active);
+      tab.setAttribute("aria-selected", String(active));
+    });
+    document.querySelectorAll("[data-dashboard-view]").forEach((view) => {
+      const active = view.dataset.dashboardView === taskId;
+      view.hidden = !active;
+      view.classList.toggle("hidden", !active);
+    });
+  };
+  const createTaskTab = (model) => {
+    const taskId = `model-${model.ollama.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+    const existing = taskTabs.get(taskId);
+    if (existing) { activateTaskTab(taskId); return existing; }
+    const tab = document.createElement("div");
+    tab.className = "dashboard-tab dashboard-tab--temporary";
+    tab.type = "button";
+    tab.dataset.dashboardTab = taskId;
+    tab.setAttribute("aria-selected", "true");
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("tabindex", "0");
+    tab.innerHTML = `<span>AI: ${model.name}</span><button class="temporary-tab-close" type="button" aria-label="Close ${model.name} task">×</button>`;
+    const view = document.createElement("section");
+    view.className = "dashboard-view model-task-view is-active";
+    view.dataset.dashboardView = taskId;
+    view.innerHTML = `<div class="task-header"><div><div class="section-kicker">AI task</div><h1></h1><p class="section-lead" data-task-status>Preparing model task...</p></div></div><div class="panel task-progress-panel"><div class="model-progress-heading"><span data-task-progress-label>Waiting for SSH...</span><strong data-task-percent>0%</strong></div><div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="progress-value" data-task-progress style="width: 0%"></span></div><pre class="deployment-log task-log" data-task-log hidden></pre></div><section class="panel task-chat-panel" data-task-chat hidden><div class="chat-header"><h2>Chat</h2><span class="status-badge status-badge--neutral" data-task-memory>Idle</span></div><div class="chat-messages" data-task-messages role="log" aria-live="polite"></div><form class="chat-form" data-task-form><label class="sr-only" for="${taskId}-prompt">Message</label><input id="${taskId}-prompt" data-task-input type="text" placeholder="Ask your model..." autocomplete="off" required><button class="button button-primary" type="submit">Send</button></form></section>`;
+    view.querySelector("h1").textContent = model.name;
+    $("dashboard-tabs").append(tab);
+    document.querySelector("main .dashboard-layout").append(view);
+    const state = { taskId, model, tab, view, jobId: null, requestId: null, response: null };
+    taskTabs.set(taskId, state);
+    tab.addEventListener("click", (event) => { if (!event.target.closest(".temporary-tab-close")) activateTaskTab(taskId); });
+    tab.querySelector(".temporary-tab-close").addEventListener("click", (event) => { event.stopPropagation(); taskTabs.delete(taskId); tab.remove(); view.remove(); setDashboardTab("marketplace"); });
+    activateTaskTab(taskId);
+    return state;
+  };
+  const updateTaskProgress = (payload) => {
+    const state = [...taskTabs.values()].find((task) => task.jobId === payload.jobId);
+    if (!state) return;
+    const percent = Number.isFinite(payload.percent) ? Math.max(0, Math.min(100, payload.percent)) : 0;
+    state.view.querySelector("[data-task-percent]").textContent = `${percent}%`;
+    state.view.querySelector("[data-task-progress]").style.width = `${percent}%`;
+    state.view.querySelector(".progress-track").setAttribute("aria-valuenow", String(percent));
+    state.view.querySelector("[data-task-progress-label]").textContent = payload.message || "Downloading model...";
+    state.view.querySelector("[data-task-status]").textContent = payload.state === "complete" ? "Download complete. Chat is ready." : payload.state === "error" ? "Download failed." : "Downloading over SSH...";
+    const log = state.view.querySelector("[data-task-log]");
+    log.hidden = false;
+    if (payload.message) log.textContent += `${payload.message}\n`;
+    if (payload.state === "complete") state.view.querySelector("[data-task-chat]").hidden = false;
+  };
+  const updateTaskLog = (entry) => {
+    const state = [...taskTabs.values()].find((task) => task.jobId === entry.jobId);
+    if (!state) return;
+    const log = state.view.querySelector("[data-task-log]");
+    log.hidden = false;
+    log.textContent += `${entry.data || ""}\n`;
+    log.scrollTop = log.scrollHeight;
+  };
+  const handleTaskChatChunk = (payload) => {
+    const state = [...taskTabs.values()].find((task) => task.requestId === payload.requestId);
+    if (!state) return;
+    if (payload.type === "token" && state.response) state.response.textContent += payload.data;
+    if (payload.type === "error" && state.response) state.response.textContent += `\nError: ${payload.data}`;
+    if (payload.type === "done" || payload.type === "error") state.view.querySelector("[data-task-memory]").textContent = "Idle";
+    state.view.querySelector("[data-task-messages]").scrollTop = state.view.querySelector("[data-task-messages]").scrollHeight;
+  };
+  const openTaskChat = (state) => {
+    state.view.querySelector("[data-task-chat]").hidden = false;
+    const form = state.view.querySelector("[data-task-form]");
+    if (form.dataset.bound) return;
+    form.dataset.bound = "true";
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = state.view.querySelector("[data-task-input]");
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      const messages = state.view.querySelector("[data-task-messages]");
+      const user = document.createElement("div"); user.className = "chat-message chat-message--user"; user.textContent = prompt; messages.append(user);
+      state.response = document.createElement("div"); state.response.className = "chat-message chat-message--assistant"; messages.append(state.response);
+      state.requestId = `${state.taskId}-${Date.now()}`;
+      input.value = ""; state.view.querySelector("[data-task-memory]").textContent = "Responding";
+      try { await window.api.sendChatPrompt(state.model.ollama, prompt, state.requestId); }
+      catch (error) { state.response.textContent = `Error: ${error.message}`; state.view.querySelector("[data-task-memory]").textContent = "Idle"; }
+    });
+  };
   const setDashboardTab = (name) => {
     document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => { const active = tab.dataset.dashboardTab === name; tab.classList.toggle("is-active", active); tab.setAttribute("aria-selected", String(active)); });
     document.querySelectorAll("[data-dashboard-view]").forEach((view) => { const active = view.dataset.dashboardView === name; view.hidden = !active; view.classList.toggle("hidden", !active); });
-    if (name === "overview") void ensureDockerAccess();
+    if (name === "overview" || name === "docker") void ensureDockerAccess();
   };
   const addHistoryPoint = (key, value) => { if (Number.isFinite(value)) history[key].push(value); if (history[key].length > 30) history[key].shift(); };
   const renderChart = (id, values, color, min = null, max = null) => {
@@ -140,8 +228,9 @@
     modal.querySelector(".modal-close").addEventListener("click", () => modal.remove()); modal.addEventListener("click", (event) => { if (event.target === modal) modal.remove(); }); document.body.append(modal);
   };
   const deployModel = async (model, button) => {
+    const task = createTaskTab(model);
     button.disabled = true; button.textContent = "Pulling...";
-    try { await window.api.deployService({ type: "model", model: model.ollama }); showToast(`Pull started for ${model.name}`); }
+    try { const result = await window.api.deployService({ type: "model", model: model.ollama }); task.jobId = result.jobId; task.view.querySelector("[data-task-status]").textContent = "Download started over SSH."; showToast(`Pull started for ${model.name}`); }
     catch (error) { showError(error); button.disabled = false; button.textContent = "Download"; }
   };
   const removeModel = async (model, button) => {
@@ -150,8 +239,10 @@
     catch (error) { showError(error); button.disabled = false; }
   };
   const runModel = async (model, button) => {
+    const task = createTaskTab(model);
+    openTaskChat(task);
     button.disabled = true;
-    try { await window.api.runModel(model.ollama); showToast(`Spuštění modelu ${model.name} bylo zahájeno.`); }
+    try { await window.api.runModel(model.ollama); task.view.querySelector("[data-task-status]").textContent = "Model is running. Send a prompt below."; showToast(`Spuštění modelu ${model.name} bylo zahájeno.`); }
     catch (error) { showError(error); }
     finally { button.disabled = false; }
   };
@@ -162,7 +253,7 @@
     const model = input.value.trim();
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.\/:@-]{0,127}$/.test(model)) { showError(new Error("Zadejte platný název Ollama modelu.")); return; }
     button.disabled = true;
-    try { await window.api.deployService({ type: "model", model }); input.value = ""; showToast(`Stahování modelu ${model} bylo zahájeno.`); }
+    try { const task = createTaskTab({ name: model, ollama: model }); const result = await window.api.deployService({ type: "model", model }); task.jobId = result.jobId; input.value = ""; showToast(`Stahování modelu ${model} bylo zahájeno.`); }
     catch (error) { showError(error); }
     finally { button.disabled = false; }
   };
@@ -215,7 +306,7 @@
   };
 
   const initializeChat = () => {
-    window.api.onChatChunk((payload) => { if (payload.type === "token" && chatResponse) chatResponse.textContent += payload.data; if (payload.type === "error" && chatResponse) chatResponse.textContent += `\nError: ${payload.data}`; if (payload.type === "done" || payload.type === "error") $("chat-memory").textContent = "Idle"; $("chat-messages").scrollTop = $("chat-messages").scrollHeight; });
+    window.api.onChatChunk((payload) => { if (payload.requestId) return; if (payload.type === "token" && chatResponse) chatResponse.textContent += payload.data; if (payload.type === "error" && chatResponse) chatResponse.textContent += `\nError: ${payload.data}`; if (payload.type === "done" || payload.type === "error") $("chat-memory").textContent = "Idle"; $("chat-messages").scrollTop = $("chat-messages").scrollHeight; });
     $("chat-form").addEventListener("submit", async (event) => { event.preventDefault(); if (!chatModel) return; const input = $("chat-prompt"); const prompt = input.value.trim(); if (!prompt) return; const messages = $("chat-messages"); const user = document.createElement("div"); user.className = "chat-message chat-message--user"; user.textContent = prompt; messages.append(user); chatResponse = document.createElement("div"); chatResponse.className = "chat-message chat-message--assistant"; messages.append(chatResponse); input.value = ""; $("chat-send").disabled = true; $("chat-memory").textContent = "Responding"; try { await window.api.sendChatPrompt(chatModel, prompt); } catch (error) { chatResponse.textContent = `Error: ${error.message}`; } finally { $("chat-send").disabled = false; $("chat-memory").textContent = "Idle"; } });
   };
   document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => tab.addEventListener("click", () => setDashboardTab(tab.dataset.dashboardTab)));
@@ -227,6 +318,6 @@
   $("restart-server").addEventListener("click", () => requestPowerAction("restart", "reboot"));
   $("shutdown-server").addEventListener("click", () => requestPowerAction("shutdown", "shutdown"));
   $("start-chat")?.addEventListener("click", () => { $("chat-panel").hidden = false; $("chat-prompt").focus(); });
-  window.api.onDeploymentLog(appendDeploymentLog); window.api.onInstallProgress(appendDeploymentLog); window.api.onModelProgress(updateModelProgress); window.api.onConnectionState((payload) => { showError(new Error(payload.reason || "SSH connection lost.")); window.clearInterval(refreshTimer); }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
+  window.api.onDeploymentLog((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); } }); window.api.onChatChunk(handleTaskChatChunk); window.api.onConnectionState((payload) => { showError(new Error(payload.reason || "SSH connection lost.")); window.clearInterval(refreshTimer); }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();
