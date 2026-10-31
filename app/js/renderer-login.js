@@ -27,7 +27,7 @@
   };
 
   const renderProfiles = () => {
-    profileSelect.replaceChildren(new Option("New connection", ""));
+    profileSelect.replaceChildren(new Option(t("newConnection", "New connection"), ""));
     profiles.forEach((profile) => profileSelect.append(new Option(`${profile.name} — ${profile.username}@${profile.host}`, profile.id)));
     $("delete-profile").disabled = !profileSelect.value;
   };
@@ -67,7 +67,7 @@
 
   $("auth-type").addEventListener("change", setAuthFields);
   $("delete-profile").addEventListener("click", async () => {
-    if (!selectedProfile || !window.confirm(`Delete the saved profile "${selectedProfile.name}"?`)) return;
+    if (!selectedProfile || !window.confirm(`${t("deleteProfileConfirm", "Delete the saved profile?")} "${selectedProfile.name}"`)) return;
     try {
       await window.api.deleteProfile(selectedProfile.id);
       selectedProfile = null;
@@ -90,20 +90,20 @@
     const keyPath = $("key-path").value.trim();
     const profileName = $("profile-name").value.trim();
     let valid = true;
-    [["host", host, "Enter a host or IP address."], ["username", username, "Enter a username."]].forEach(([name, value, error]) => {
+    [["host", host, t("enterHost", "Enter a host or IP address.")], ["username", username, t("enterUsername", "Enter a username.")]].forEach(([name, value, error]) => {
       setError(name, value ? "" : error);
       if (!value) valid = false;
     });
     const canUseSavedPassword = selectedProfile && selectedProfile.authType === "password" && selectedProfile.hasPassword;
     if (authType === "password" && !password && !canUseSavedPassword) {
-      setError("password", "Enter your SSH password or choose a saved profile.");
+      setError("password", t("enterPassword", "Enter your SSH password or choose a saved profile."));
       valid = false;
     } else setError("password");
     if (authType === "key" && !keyPath) {
-      setError("key-path", "Enter a private key path.");
+      setError("key-path", t("enterKey", "Enter a private key path."));
       valid = false;
     } else setError("key-path");
-    setError("port", Number.isInteger(port) && port > 0 && port <= 65535 ? "" : "Use a port between 1 and 65535.");
+    setError("port", Number.isInteger(port) && port > 0 && port <= 65535 ? "" : t("validPort", "Use a port between 1 and 65535."));
     if (!Number.isInteger(port) || port < 1 || port > 65535) valid = false;
     if (!valid) return;
 

@@ -15,8 +15,8 @@
         <span class="brand-mark" aria-hidden="true">S</span>
         <span class="brand-name">ShipAI</span>
       </a>
-      <span class="topbar-caption">Infrastructure operations</span>
-      <label class="language-control" for="language-select"><span class="sr-only">Language</span><select id="language-select" aria-label="Language"></select></label>
+      <span class="topbar-caption" data-i18n="infrastructure">Infrastructure operations</span>
+      <label class="language-control" for="language-select"><span class="sr-only" data-i18n="language">Language</span><select id="language-select" data-i18n-aria-label="language" aria-label="Language"></select></label>
     </header>
 
     <main class="auth-layout">
@@ -27,19 +27,19 @@
 
         <form id="connection-form" class="form-stack" novalidate>
           <div class="form-field">
-            <label for="profile-select">Saved server profile</label>
+            <label for="profile-select" data-i18n="savedProfile">Saved server profile</label>
             <div class="profile-row">
               <select id="profile-select" class="form-select">
-                <option value="">New connection</option>
+                <option value="" data-i18n="newConnection">New connection</option>
               </select>
-              <button id="delete-profile" class="button button-secondary button-small" type="button" disabled>Delete</button>
+              <button id="delete-profile" class="button button-secondary button-small" type="button" data-i18n="delete" disabled>Delete</button>
             </div>
             <p class="field-error" data-error-for="profile-select"></p>
           </div>
 
           <div class="form-field">
-            <label for="profile-name">Profile name <span class="field-hint">(optional)</span></label>
-            <input id="profile-name" name="profileName" type="text" maxlength="80" placeholder="Production GPU server" />
+            <label for="profile-name" data-i18n="profileName">Profile name <span class="field-hint" data-i18n="optional">(optional)</span></label>
+            <input id="profile-name" name="profileName" type="text" maxlength="80" data-i18n-placeholder="productionServer" placeholder="Production GPU server" />
           </div>
 
           <div class="form-field">
@@ -63,32 +63,32 @@
 
           <div class="form-field">
             <label for="password" data-i18n="password">Password</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your SSH password" />
+            <input id="password" name="password" type="password" autocomplete="current-password" data-i18n-placeholder="sshPasswordPlaceholder" placeholder="Enter your SSH password" />
             <p class="field-error" data-error-for="password"></p>
           </div>
 
           <div class="form-field">
-            <label for="auth-type">Authentication method</label>
+            <label for="auth-type" data-i18n="authMethod">Authentication method</label>
             <select id="auth-type" class="form-select">
-              <option value="password">SSH password</option>
-              <option value="key">Private key file</option>
+              <option value="password" data-i18n="sshPassword">SSH password</option>
+              <option value="key" data-i18n="privateKey">Private key file</option>
             </select>
           </div>
 
           <div id="key-field" class="form-field" hidden>
-            <label for="key-path">Private key path</label>
+            <label for="key-path" data-i18n="privateKeyPath">Private key path</label>
             <input id="key-path" name="keyPath" type="text" autocomplete="off" placeholder="C:\Users\you\.ssh\id_ed25519" />
             <p class="field-error" data-error-for="key-path"></p>
           </div>
 
           <div class="form-field">
-            <label for="sudo-password">Sudo password <span class="field-hint">(optional)</span></label>
-            <input id="sudo-password" name="sudoPassword" type="password" autocomplete="current-password" placeholder="Defaults to SSH password" />
+            <label for="sudo-password" data-i18n="sudoPassword">Sudo password <span class="field-hint" data-i18n="optional">(optional)</span></label>
+            <input id="sudo-password" name="sudoPassword" type="password" autocomplete="current-password" data-i18n-placeholder="defaultSudo" placeholder="Defaults to SSH password" />
             <p class="field-error" data-error-for="sudo-password"></p>
           </div>
 
           <p id="connection-message" class="form-message" role="status" aria-live="polite"></p>
-          <label class="save-profile-control"><input id="save-profile" type="checkbox" checked /> Save this server profile securely on this computer</label>
+          <label class="save-profile-control"><input id="save-profile" type="checkbox" checked /> <span data-i18n="saveProfile">Save this server profile securely on this computer</span></label>
           <button id="connect-button" class="button button-primary button-full" type="submit">
             <span class="button-text" data-i18n="connect">Connect server</span>
             <span class="button-spinner" aria-hidden="true"></span>

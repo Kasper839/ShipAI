@@ -15,28 +15,28 @@
         <span class="brand-mark" aria-hidden="true">S</span>
         <span class="brand-name">ShipAI</span>
       </a>
-      <nav id="dashboard-tabs" class="dashboard-tabs" aria-label="Dashboard sections">
-        <button class="dashboard-tab is-active" type="button" data-dashboard-tab="overview" aria-selected="true">Server statistics</button>
-        <button class="dashboard-tab" type="button" data-dashboard-tab="docker" aria-selected="false">Docker</button>
-        <button class="dashboard-tab" type="button" data-dashboard-tab="marketplace" aria-selected="false">Install AI Models</button>
+      <nav id="dashboard-tabs" class="dashboard-tabs" data-i18n-aria-label="dashboardSections" aria-label="Dashboard sections">
+        <button class="dashboard-tab is-active" type="button" data-dashboard-tab="overview" data-i18n="stats" aria-selected="true">Server statistics</button>
+        <button class="dashboard-tab" type="button" data-dashboard-tab="docker">Docker</button>
+        <button class="dashboard-tab" type="button" data-dashboard-tab="marketplace" data-i18n="install" aria-selected="false">Install AI Models</button>
         <button class="dashboard-tab" type="button" data-dashboard-tab="ai-chat" aria-selected="false">AI Chat</button>
       </nav>
       <div class="dashboard-actions">
-        <label class="language-control" for="language-select"><span class="sr-only">Language</span><select id="language-select" aria-label="Language"></select></label>
-        <button id="restart-server" class="button button-secondary" type="button">Restart server</button>
-        <button id="shutdown-server" class="button button-danger" type="button">Shutdown server</button>
+        <label class="language-control" for="language-select"><span class="sr-only" data-i18n="language">Language</span><select id="language-select" data-i18n-aria-label="language" aria-label="Language"></select></label>
+        <button id="restart-server" class="button button-secondary" type="button" data-i18n="restart">Restart server</button>
+        <button id="shutdown-server" class="button button-danger" type="button" data-i18n="shutdown">Shutdown server</button>
         <button id="disconnect-button" class="button button-secondary" type="button" data-i18n="disconnect">Disconnect</button>
       </div>
     </header>
 
     <main class="dashboard-layout">
-      <section id="model-progress" class="model-progress model-progress--top" hidden aria-label="Model download progress">
+      <section id="model-progress" class="model-progress model-progress--top" hidden data-i18n-aria-label="modelProgress" aria-label="Model download progress">
         <div class="model-progress-heading">
-          <strong id="model-progress-model">Preparing model download</strong>
+          <strong id="model-progress-model" data-i18n="preparingDownload">Preparing model download</strong>
           <strong id="model-progress-percent">0%</strong>
         </div>
         <div class="model-progress-details">
-          <span id="model-progress-speed">Waiting for transfer</span>
+          <span id="model-progress-speed" data-i18n="waitingTransfer">Waiting for transfer</span>
           <span id="model-progress-size">0 B / —</span>
         </div>
         <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -48,16 +48,16 @@
       <div id="dashboard-error" class="error-banner" role="alert" hidden></div>
       <div class="dashboard-view" data-dashboard-view="marketplace" hidden>
         <section class="marketplace-hero">
-          <div class="marketplace-summary"><strong id="catalogue-count">Loading catalogue...</strong><span>models in the library</span><span id="installed-count">Checking Ollama...</span></div>
+          <div class="marketplace-summary"><strong id="catalogue-count" data-i18n="loadingCatalogue">Loading catalogue...</strong><span data-i18n="modelsLibrary">models in the library</span><span id="installed-count" data-i18n="checkingOllama">Checking Ollama...</span></div>
         </section>
         <section class="panel marketplace-panel" aria-labelledby="catalogue-title">
           <div class="custom-model-download">
             <form id="custom-model-form">
-              <label for="custom-model-name">Stáhnout jakýkoliv model z Ollama</label>
-              <div class="custom-model-controls"><input id="custom-model-name" type="text" placeholder="např. codellama:7b, qwen2.5:14b, deepseek-r1" autocomplete="off" required><button class="button button-primary" type="submit">Stáhnout model</button></div>
+              <label for="custom-model-name" data-i18n="customPull">Download any Ollama model</label>
+              <div class="custom-model-controls"><input id="custom-model-name" type="text" placeholder="codellama:7b, qwen2.5:14b, deepseek-r1" autocomplete="off" required><button class="button button-primary" data-i18n="pullModel" type="submit">Download model</button></div>
             </form>
           </div>
-          <div class="panel-header"><div class="catalogue-tools"><input id="model-search" type="search" placeholder="Search models, capabilities..." aria-label="Search model catalogue"><select id="model-category" aria-label="Filter by deployment profile"><option value="all">All profiles</option></select></div></div>
+          <div class="panel-header"><div class="catalogue-tools"><input id="model-search" type="search" data-i18n-placeholder="searchModels" data-i18n-aria-label="searchModels" placeholder="Search models, capabilities..." aria-label="Search model catalogue"><select id="model-category" data-i18n-aria-label="filterProfile" aria-label="Filter by deployment profile"><option value="all" data-i18n="allProfiles">All profiles</option></select></div></div>
           <div id="model-catalogue" class="model-catalogue" aria-live="polite"><p class="catalogue-loading">Loading model definitions...</p></div>
         </section>
         <div id="deployment-log" class="deployment-log" role="log" aria-live="polite" hidden></div>
@@ -65,7 +65,7 @@
       <div class="dashboard-view is-active" data-dashboard-view="overview">
         <div id="environment-warning" class="warning-banner" role="alert" hidden></div>
         <section class="panel charts-panel" aria-labelledby="charts-title">
-          <div class="panel-header panel-header--status"><span id="charts-status" class="updated-label" role="status" aria-live="polite">Waiting for telemetry</span></div>
+          <div class="panel-header panel-header--status"><span id="charts-status" class="updated-label" role="status" aria-live="polite" data-i18n="waitingTelemetry">Waiting for telemetry</span></div>
           <div class="chart-grid">
             <article class="chart-card">
               <div class="chart-title"><span data-i18n="cpu">CPU usage</span><span class="info-tooltip" title="CPU usage shows how busy the processor is.">i</span><strong id="chart-cpu-value">N/A</strong></div>
@@ -80,7 +80,7 @@
               <svg id="network-chart" class="telemetry-chart" viewBox="0 0 320 110" role="img" aria-label="Network usage history"></svg>
             </article>
             <article class="chart-card">
-              <div class="chart-title"><span>Disk I/O</span><strong id="chart-disk-value">N/A</strong></div>
+              <div class="chart-title"><span data-i18n="diskIo">Disk I/O</span><strong id="chart-disk-value">N/A</strong></div>
               <svg id="disk-chart" class="telemetry-chart" viewBox="0 0 320 110" role="img" aria-label="Disk I/O history"></svg>
             </article>
           </div>
@@ -88,11 +88,11 @@
         <section class="panel storage-panel" aria-labelledby="storage-title">
           <div id="storage-list" class="storage-list" aria-live="polite"><p class="catalogue-loading">Waiting for disk telemetry...</p></div>
         </section>
-        <section class="metric-grid" aria-label="System metrics">
+        <section class="metric-grid" data-i18n-aria-label="systemMetrics" aria-label="System metrics">
           <article class="metric-card">
             <div class="metric-label"><span data-i18n="temp">CPU temperature</span><span class="info-tooltip" title="CPU temperature helps monitor cooling.">i</span></div>
             <div class="metric-value"><span id="cpu-temperature">N/A</span><span class="metric-unit">°C</span></div>
-            <div class="metric-meta"><span class="status-dot status-dot--neutral" aria-hidden="true"></span>Waiting for telemetry</div>
+            <div class="metric-meta"><span class="status-dot status-dot--neutral" aria-hidden="true"></span><span data-i18n="waitingTelemetry">Waiting for telemetry</span></div>
           </article>
           <article class="metric-card">
             <div class="metric-label"><span data-i18n="ram">RAM usage</span><span class="info-tooltip" title="RAM controls how many services can run together.">i</span></div>
@@ -102,13 +102,13 @@
         </section>
       </div>
       <div class="dashboard-view" data-dashboard-view="docker" hidden>
-        <div id="docker-status" class="warning-banner" role="status" aria-live="polite">Initializing Docker Environment...</div>
+        <div id="docker-status" class="warning-banner" role="status" aria-live="polite" data-i18n="initializingDocker">Initializing Docker Environment...</div>
         <section class="panel docker-panel" aria-labelledby="docker-title">
           <div class="panel-header panel-header--status"><strong id="container-count">0 running</strong></div>
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th scope="col">Container</th><th scope="col">Image</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
-              <tbody id="containers-table-body"><tr><td colspan="4">Initializing Docker Environment...</td></tr></tbody>
+              <thead><tr><th scope="col" data-i18n="container">Container</th><th scope="col" data-i18n="image">Image</th><th scope="col" data-i18n="status">Status</th><th scope="col" data-i18n="actions">Actions</th></tr></thead>
+              <tbody id="containers-table-body"><tr><td colspan="4" data-i18n="initializingDocker">Initializing Docker Environment...</td></tr></tbody>
             </table>
           </div>
         </section>
@@ -117,18 +117,18 @@
         <section class="chat-studio" aria-labelledby="chat-title">
           <header class="chat-studio-header">
             <div class="chat-studio-actions">
-              <label class="chat-model-selector" for="chat-model-select"><span>Installed model</span><select id="chat-model-select" aria-label="Select Installed Model"><option value="">Loading installed models...</option></select></label>
-              <span id="chat-memory" class="status-badge status-badge--neutral">Idle</span>
-              <button id="clear-chat" class="button button-secondary" type="button">Clear Conversation</button>
+              <label class="chat-model-selector" for="chat-model-select"><span data-i18n="installedModel">Installed model</span><select id="chat-model-select" data-i18n-aria-label="selectModel" aria-label="Select Installed Model"><option value="" data-i18n="loadingModels">Loading installed models...</option></select></label>
+              <span id="chat-memory" class="status-badge status-badge--neutral" data-i18n="idle">Idle</span>
+              <button id="clear-chat" class="button button-secondary" data-i18n="clearConversation" type="button">Clear Conversation</button>
             </div>
           </header>
-          <div id="chat-empty-state" class="chat-empty-state">Select an installed Ollama model to start chatting.</div>
+          <div id="chat-empty-state" class="chat-empty-state" data-i18n="chatEmpty">Select an installed Ollama model to start chatting.</div>
           <div id="chat-messages" class="chat-messages chat-studio-messages" role="log" aria-live="polite"></div>
           <div class="chat-composer-shell">
             <form id="chat-form" class="chat-form chat-composer">
               <label class="sr-only" for="chat-prompt">Message</label>
-              <textarea id="chat-prompt" rows="1" placeholder="Message your model..." autocomplete="off" required></textarea>
-              <div class="chat-composer-actions"><button id="chat-stop" class="button button-danger" type="button" hidden>Stop Generating</button><button id="chat-send" class="button button-primary" type="submit" disabled>Send</button></div>
+              <textarea id="chat-prompt" rows="1" data-i18n-placeholder="messageModel" placeholder="Message your model..." autocomplete="off" required></textarea>
+              <div class="chat-composer-actions"><button id="chat-stop" class="button button-danger" data-i18n="stopGenerating" type="button" hidden>Stop Generating</button><button id="chat-send" class="button button-primary" data-i18n="send" type="submit" disabled>Send</button></div>
             </form>
           </div>
         </section>

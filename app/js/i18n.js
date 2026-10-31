@@ -28,6 +28,57 @@
     sv: { stats: "Serverstatistik", install: "Installation och AI-modeller", disconnect: "Koppla från", refresh: "Uppdatera data", deploy: "Installera", checking: "Kontrollerar hårdvara", insufficient: "Otillräckligt RAM" }
   };
   Object.entries(extraLanguages).forEach(([code, values]) => { translations[code] = { ...base, ...values }; });
+  Object.assign(translations.en, {
+    language: "Language", infrastructure: "Infrastructure operations", dashboardSections: "Dashboard sections",
+    restart: "Restart server", shutdown: "Shutdown server", modelProgress: "Model download progress",
+    preparingDownload: "Preparing model download", waitingTransfer: "Waiting for transfer", modelsLibrary: "models in the library",
+    checkingOllama: "Checking Ollama...", customPull: "Download any Ollama model", pullModel: "Download model",
+    searchModels: "Search models, capabilities...", filterProfile: "Filter by deployment profile", allProfiles: "All profiles",
+    loadingCatalogue: "Loading model definitions...", waitingTelemetry: "Waiting for telemetry", diskIo: "Disk I/O",
+    systemMetrics: "System metrics", waitingDisk: "Waiting for disk telemetry...", initializingDocker: "Initializing Docker Environment...",
+    container: "Container", image: "Image", status: "Status", actions: "Actions", installedModel: "Installed model",
+    selectModel: "Select Installed Model", loadingModels: "Loading installed models...", idle: "Idle", responding: "Responding",
+    clearConversation: "Clear Conversation", chatEmpty: "Select an installed Ollama model to start chatting.",
+    messageModel: "Message your model...", stopGenerating: "Stop Generating", send: "Send", modelInstalled: "installed in Ollama",
+    noModels: "No installed models found", start: "Start", stop: "Stop", logs: "Logs", running: "Running", stopped: "Stopped",
+    synced: "Synced", noPorts: "No published ports", close: "Close", copyCode: "Copy Code", copied: "Copied",
+    installed: "Installed", available: "Available", tryRun: "Try / Run", download: "Download", remove: "Remove",
+    pulling: "Pulling...", modelDownload: "Model download", transferring: "Transferring over SSH", calculating: "Calculating transfer size...",
+    downloadComplete: "Download complete", modelInstalledRemote: "Model installed on remote host", downloadFailed: "Download failed",
+    newConnection: "New connection", savedProfile: "Saved server profile", delete: "Delete", profileName: "Profile name",
+    optional: "optional", authMethod: "Authentication method", sshPassword: "SSH password", privateKey: "Private key file",
+    privateKeyPath: "Private key path", sudoPassword: "Sudo password", saveProfile: "Save this server profile securely on this computer",
+    productionServer: "Production GPU server", sshPasswordPlaceholder: "Enter your SSH password",
+    defaultSudo: "Defaults to SSH password", enterHost: "Enter a host or IP address.", enterUsername: "Enter a username.",
+    enterPassword: "Enter your SSH password or choose a saved profile.", enterKey: "Enter a private key path.",
+    validPort: "Use a port between 1 and 65535.", deleteProfileConfirm: "Delete the saved profile?"
+  });
+  Object.assign(translations.cs, {
+    connecting: "Připojování...", connectionFailed: "K serveru se nelze připojit.",
+    enterHost: "Zadejte hostitele nebo IP adresu.", enterUsername: "Zadejte uživatelské jméno.", enterPassword: "Zadejte SSH heslo nebo vyberte uložený profil.",
+    enterKey: "Zadejte cestu k privátnímu klíči.", validPort: "Použijte port mezi 1 a 65535.", deleteProfileConfirm: "Smazat uložený profil?",
+    language: "Jazyk", infrastructure: "Správa infrastruktury", dashboardSections: "Sekce panelu",
+    restart: "Restartovat server", shutdown: "Vypnout server", modelProgress: "Průběh stahování modelu",
+    preparingDownload: "Příprava stahování modelu", waitingTransfer: "Čekání na přenos", modelsLibrary: "modelů v knihovně",
+    checkingOllama: "Kontrola Ollamy...", customPull: "Stáhnout libovolný model z Ollamy", pullModel: "Stáhnout model",
+    searchModels: "Hledat modely a schopnosti...", filterProfile: "Filtrovat podle profilu nasazení", allProfiles: "Všechny profily",
+    loadingCatalogue: "Načítání definic modelů...", waitingTelemetry: "Čekání na telemetrii", diskIo: "Diskové I/O",
+    systemMetrics: "Systémové metriky", waitingDisk: "Čekání na diskovou telemetrii...", initializingDocker: "Inicializace Dockeru...",
+    container: "Kontejner", image: "Obraz", status: "Stav", actions: "Akce", installedModel: "Nainstalovaný model",
+    selectModel: "Vybrat nainstalovaný model", loadingModels: "Načítání nainstalovaných modelů...", idle: "Připraveno", responding: "Odpovídá",
+    clearConversation: "Vymazat konverzaci", chatEmpty: "Vyberte nainstalovaný model Ollama a začněte chatovat.",
+    messageModel: "Napište zprávu modelu...", stopGenerating: "Zastavit generování", send: "Odeslat", modelInstalled: "nainstalováno v Ollamě",
+    noModels: "Nebyly nalezeny nainstalované modely", start: "Spustit", stop: "Zastavit", logs: "Logy", running: "Běží", stopped: "Zastaveno",
+    synced: "Synchronizováno", noPorts: "Žádné publikované porty", close: "Zavřít", copyCode: "Kopírovat kód", copied: "Zkopírováno",
+    installed: "Nainstalováno", available: "Dostupné", tryRun: "Vyzkoušet / Spustit", download: "Stáhnout", remove: "Odstranit",
+    pulling: "Stahování...", modelDownload: "Stahování modelu", transferring: "Přenos přes SSH", calculating: "Výpočet velikosti přenosu...",
+    downloadComplete: "Stahování dokončeno", modelInstalledRemote: "Model nainstalován na vzdáleném hostiteli", downloadFailed: "Stahování selhalo",
+    newConnection: "Nové připojení", savedProfile: "Uložený profil serveru", delete: "Smazat", profileName: "Název profilu",
+    optional: "volitelné", authMethod: "Způsob ověření", sshPassword: "SSH heslo", privateKey: "Soubor privátního klíče",
+    privateKeyPath: "Cesta k privátnímu klíči", sudoPassword: "Sudo heslo", saveProfile: "Bezpečně uložit tento profil serveru v počítači",
+    productionServer: "Produkční GPU server", sshPasswordPlaceholder: "Zadejte SSH heslo",
+    defaultSudo: "Standardně SSH heslo"
+  });
 
   const translate = (key) => (translations[localStorage.getItem("shipai-language") || "en"] || base)[key] || base[key] || key;
   const apply = () => {
@@ -36,6 +87,7 @@
     document.querySelectorAll("[data-i18n]").forEach((element) => { element.textContent = translate(element.dataset.i18n); });
     document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => { element.placeholder = translate(element.dataset.i18nPlaceholder); });
     document.querySelectorAll("[data-i18n-title]").forEach((element) => { element.title = translate(element.dataset.i18nTitle); });
+    document.querySelectorAll("[data-i18n-aria-label]").forEach((element) => { element.setAttribute("aria-label", translate(element.dataset.i18nAriaLabel)); });
     const selector = document.getElementById("language-select");
     if (selector) selector.value = language;
     window.dispatchEvent(new CustomEvent("shipai:language-changed", { detail: language }));

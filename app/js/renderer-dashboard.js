@@ -3,6 +3,7 @@
   if (!window.api) return;
 
   const $ = (id) => document.getElementById(id);
+  const t = (key, fallback) => window.shipaiI18n ? window.shipaiI18n.translate(key) : fallback;
   const elements = {
     temperature: $("cpu-temperature"), ramUsage: $("ram-usage"), ramTotal: $("ram-total"),
     ramProgress: $("ram-progress"),
@@ -46,7 +47,7 @@
     const previous = chatModel;
     select.replaceChildren();
     if (!installedModels.length) {
-      select.add(new Option("No installed models found", ""));
+      select.add(new Option(t("noModels", "No installed models found"), ""));
       setChatModel(null);
       return;
     }
@@ -119,11 +120,11 @@
     containers.forEach((container) => {
       const running = container.state === "running" || /^up\b/i.test(container.status);
       const row = document.createElement("tr");
-      row.innerHTML = `<th scope="row"><span class="service-name"></span><span class="service-id">AI infrastructure container</span></th><td class="container-image"></td><td><span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span data-container-state></span></span></td><td class="last-action">Synced</td><td><span data-container-actions></span></td>`;
-      row.querySelector(".service-name").textContent = container.name; row.querySelector(".container-image").textContent = container.ports || "No published ports";
-      row.querySelector("[data-container-state]").textContent = running ? "Running" : "Stopped";
+      row.innerHTML = `<th scope="row"><span class="service-name"></span><span class="service-id"></span></th><td class="container-image"></td><td><span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span data-container-state></span></span></td><td class="last-action"></td><td><span data-container-actions></span></td>`;
+      row.querySelector(".service-name").textContent = container.name; row.querySelector(".service-id").textContent = t("container", "Container"); row.querySelector(".container-image").textContent = container.ports || t("noPorts", "No published ports");
+      row.querySelector("[data-container-state]").textContent = running ? t("running", "Running") : t("stopped", "Stopped"); row.querySelector(".last-action").textContent = t("synced", "Synced");
       const actions = row.querySelector("[data-container-actions]");
-      [["start", "Start"], ["stop", "Stop"], ["logs", "Logs"]].filter(([action]) => action === "logs" || action === (running ? "stop" : "start")).forEach(([action, label]) => {
+      [["start", t("start", "Start")], ["stop", t("stop", "Stop")], ["logs", t("logs", "Logs")]].filter(([action]) => action === "logs" || action === (running ? "stop" : "start")).forEach(([action, label]) => {
         const button = document.createElement("button"); button.className = "button button-small button-secondary"; button.type = "button"; button.textContent = label;
         button.addEventListener("click", () => runDockerAction(action, container, button)); actions.append(button);
       });
@@ -207,9 +208,9 @@
     const task = createTaskTab(model);
     activeDownloadModel = model.name;
     updateModelProgress({ model: model.name, state: "preparing", percent: 0, message: "Starting Ollama pull..." });
-    button.disabled = true; button.textContent = "Pulling...";
+    button.disabled = true; button.textContent = t("pulling", "Pulling...");
     try { const result = await window.api.deployService({ type: "model", model: model.ollama }); task.jobId = result.jobId; showToast(`Pull started for ${model.name}`); }
-    catch (error) { showError(error); button.disabled = false; button.textContent = "Download"; }
+    catch (error) { showError(error); button.disabled = false; button.textContent = t("download", "Download"); }
   };
   const removeModel = async (model, button) => {
     button.disabled = true;
@@ -243,10 +244,13 @@
     groups.forEach((group) => { const section = document.createElement("section"); section.className = "model-group"; section.innerHTML = `<div class="model-group-heading"><h3>${group}</h3><span>${visible.filter((model) => model.category === group).length} engines</span></div><div class="model-grid"></div>`; const grid = section.querySelector(".model-grid");
       visible.filter((model) => model.category === group).forEach((model) => { const installed = modelInstalled(model); const fit = compatibility(model); const card = document.createElement("article"); card.className = "model-card"; card.dataset.modelId = model.id; card.innerHTML = `<button class="model-card-main" type="button"><span class="model-card-top"><span class="model-category">${model.category}</span><span class="model-status ${installed ? "is-installed" : ""}">${installed ? "Installed" : "Available"}</span></span><h4></h4><p class="model-description"></p><span class="model-card-meta"></span><span class="model-tags"></span><span class="model-performance" title=""></span></button><div class="model-card-actions"><button class="button button-small button-secondary model-run" type="button">Try / Run</button><button class="button button-small button-primary model-download" type="button">Download</button><button class="button button-small button-secondary model-remove" type="button">Remove</button></div>`;
         card.querySelector("h4").textContent = model.name; card.querySelector(".model-description").textContent = model.description; card.querySelector(".model-card-meta").textContent = `${model.architecture} · ${model.context}`; card.querySelector(".model-tags").innerHTML = model.capabilities.slice(0, 3).map((item) => `<span class="model-tag">${item}</span>`).join("");
-        const performance = card.querySelector(".model-performance"); performance.textContent = model.vram || `~${model.minimum?.vram || "N/A"} VRAM`; performance.title = fit.reason; const run = card.querySelector(".model-run"); const download = card.querySelector(".model-download"); const remove = card.querySelector(".model-remove"); download.disabled = Boolean(installed); remove.disabled = !installed; run.addEventListener("click", () => runModel(model, run)); download.addEventListener("click", () => deployModel(model, download)); remove.addEventListener("click", () => removeModel(model, remove)); card.querySelector(".model-card-main").addEventListener("click", () => openModelDetails(model)); grid.append(card);
+        const performance = card.querySelector(".model-performance"); performance.textContent = model.vram || `~${model.minimum?.vram || "N/A"} VRAM`; performance.title = fit.reason; const run = card.querySelector(".model-run"); const download = card.querySelector(".model-download"); const remove = card.querySelector(".model-remove");
+        card.querySelector(".model-status").textContent = installed ? t("installed", "Installed") : t("available", "Available");
+        run.textContent = t("tryRun", "Try / Run"); download.textContent = t("download", "Download"); remove.textContent = t("remove", "Remove");
+        download.disabled = Boolean(installed); remove.disabled = !installed; run.addEventListener("click", () => runModel(model, run)); download.addEventListener("click", () => deployModel(model, download)); remove.addEventListener("click", () => removeModel(model, remove)); card.querySelector(".model-card-main").addEventListener("click", () => openModelDetails(model)); grid.append(card);
       }); root.append(section);
     });
-    $("catalogue-count").textContent = `${catalogue.length}`; $("installed-count").textContent = installedModelsLoaded ? `${installedModels.length} installed in Ollama` : "Select this tab to check Ollama";
+    $("catalogue-count").textContent = `${catalogue.length}`; $("installed-count").textContent = installedModelsLoaded ? `${installedModels.length} ${t("modelInstalled", "installed in Ollama")}` : t("checkingOllama", "Checking Ollama...");
   };
   const updateModelStatus = (models) => {
     const previous = installedModels.map((model) => model.name).sort().join("|");
@@ -268,20 +272,20 @@
     if (payload.model) activeDownloadModel = payload.model;
     panel.hidden = false;
     panel.dataset.active = payload.state !== "complete" && payload.state !== "error" ? "true" : "false";
-    $("model-progress-model").textContent = activeDownloadModel || "Model download";
+    $("model-progress-model").textContent = activeDownloadModel || t("modelDownload", "Model download");
     $("model-progress-percent").textContent = `${percent}%`;
     const message = payload.message || "";
     const speed = message.match(/(\d+(?:\.\d+)?\s*(?:KB|MB|GB)\/s)/i);
     const size = message.match(/(\d+(?:\.\d+)?\s*(?:KB|MB|GB)\s*\/\s*\d+(?:\.\d+)?\s*(?:KB|MB|GB))/i);
-    $("model-progress-speed").textContent = speed ? speed[1] : (payload.state === "complete" ? "Download complete" : "Transferring over SSH");
-    $("model-progress-size").textContent = size ? size[1] : (message || "Calculating transfer size...");
+    $("model-progress-speed").textContent = speed ? speed[1] : (payload.state === "complete" ? t("downloadComplete", "Download complete") : t("transferring", "Transferring over SSH"));
+    $("model-progress-size").textContent = size ? size[1] : (message || t("calculating", "Calculating transfer size..."));
     $("model-progress-value").style.width = `${percent}%`;
     panel.querySelector(".progress-track").setAttribute("aria-valuenow", String(percent));
     if (payload.state === "complete") {
-      $("model-progress-speed").textContent = "Download complete";
-      $("model-progress-size").textContent = "Model installed on remote host";
+      $("model-progress-speed").textContent = t("downloadComplete", "Download complete");
+      $("model-progress-size").textContent = t("modelInstalledRemote", "Model installed on remote host");
     }
-    if (payload.state === "error") $("model-progress-speed").textContent = "Download failed";
+    if (payload.state === "error") $("model-progress-speed").textContent = t("downloadFailed", "Download failed");
   };
   const refresh = async () => {
     if (refreshInFlight) return; refreshInFlight = true; elements.refresh.disabled = true;
@@ -304,7 +308,7 @@
   };
   const bindCopyButtons = (root) => root.querySelectorAll(".copy-code").forEach((button) => button.addEventListener("click", async () => {
     await navigator.clipboard.writeText(decodeURIComponent(button.dataset.code));
-    button.textContent = "Copied";
+    button.textContent = t("copied", "Copied");
   }));
 
   const initializeChat = () => {
@@ -314,17 +318,21 @@
     input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = `${Math.min(input.scrollHeight, 180)}px`; });
     input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("chat-form").requestSubmit(); } });
     $("chat-stop").addEventListener("click", async () => {
-      if (!chatResponse?.requestId) return;
-      await window.api.cancelChat(chatResponse.requestId);
-      $("chat-memory").textContent = "Stopped";
+      const response = chatResponse;
+      if (!response?.requestId || !response.streaming) return;
+      response.cancelled = true;
+      response.streaming = false;
       $("chat-stop").hidden = true;
       $("chat-send").disabled = !chatModel;
+      $("chat-memory").textContent = t("idle", "Idle");
+      try { await window.api.cancelChat(response.requestId); }
+      catch (error) { console.error("[Chat] Unable to cancel generation:", error); }
     });
     window.api.onChatChunk((payload) => {
-      if (payload.requestId !== chatResponse?.requestId) return;
+      if (payload.requestId !== chatResponse?.requestId || chatResponse.cancelled) return;
       if (payload.type === "token") chatResponse.querySelector(".chat-markdown").insertAdjacentHTML("beforeend", markdownToHtml(payload.data, true));
       if (payload.type === "error") chatResponse.querySelector(".chat-markdown").insertAdjacentHTML("beforeend", `<p class="chat-error">${escapeHtml(payload.data)}</p>`);
-      if (payload.type === "done" || payload.type === "error") { chatResponse.streaming = false; bindCopyButtons(chatResponse); $("chat-memory").textContent = "Idle"; $("chat-stop").hidden = true; $("chat-send").disabled = !chatModel; }
+      if (payload.type === "done" || payload.type === "error") { chatResponse.streaming = false; bindCopyButtons(chatResponse); $("chat-memory").textContent = t("idle", "Idle"); $("chat-stop").hidden = true; $("chat-send").disabled = !chatModel; }
       $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
     });
     $("chat-form").addEventListener("submit", async (event) => {
@@ -334,11 +342,11 @@
       if (!prompt) return;
       const messages = $("chat-messages");
       const user = document.createElement("article"); user.className = "chat-message chat-message--user"; user.textContent = prompt; messages.append(user);
-      chatResponse = document.createElement("article"); chatResponse.className = "chat-message chat-message--assistant"; chatResponse.requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; chatResponse.streaming = true; chatResponse.innerHTML = '<div class="chat-markdown"></div>'; messages.append(chatResponse);
-      input.value = ""; input.style.height = "auto"; $("chat-send").disabled = true; $("chat-stop").hidden = false; $("chat-memory").textContent = "Responding";
+      chatResponse = document.createElement("article"); chatResponse.className = "chat-message chat-message--assistant"; chatResponse.requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; chatResponse.streaming = true; chatResponse.cancelled = false; chatResponse.innerHTML = '<div class="chat-markdown"></div>'; messages.append(chatResponse);
+      input.value = ""; input.style.height = "auto"; $("chat-send").disabled = true; $("chat-stop").hidden = false; $("chat-memory").textContent = t("responding", "Responding");
       try { await window.api.sendChatPrompt(chatModel, prompt, chatResponse.requestId); }
-      catch (error) { chatResponse.querySelector(".chat-markdown").innerHTML = `<p class="chat-error">${escapeHtml(error.message)}</p>`; }
-      finally { chatResponse.streaming = false; $("chat-send").disabled = !chatModel; $("chat-stop").hidden = true; $("chat-memory").textContent = "Idle"; }
+      catch (error) { if (!chatResponse.cancelled) chatResponse.querySelector(".chat-markdown").innerHTML = `<p class="chat-error">${escapeHtml(error.message)}</p>`; }
+      finally { chatResponse.streaming = false; $("chat-send").disabled = !chatModel; $("chat-stop").hidden = true; $("chat-memory").textContent = t("idle", "Idle"); }
     });
   };
   $("dashboard-tabs").addEventListener("click", (event) => {
@@ -361,6 +369,7 @@
   $("restart-server").addEventListener("click", () => requestPowerAction("restart", "reboot"));
   $("shutdown-server").addEventListener("click", () => requestPowerAction("shutdown", "shutdown"));
   $("start-chat")?.addEventListener("click", () => { $("chat-panel").hidden = false; $("chat-prompt").focus(); });
+  window.addEventListener("shipai:language-changed", () => { populateChatModels(); if (catalogue.length) renderCatalogue(); });
   window.api.onDeploymentLog((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); document.querySelector(".dashboard-layout").hidden = true; $("connection-lost-view").hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();
