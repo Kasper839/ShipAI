@@ -19,6 +19,14 @@ Running a private AI server often means switching between SSH terminals, Docker 
 
 ## Key features
 
+### ✨ v1.1.0 highlights
+
+- Save multiple SSH server profiles locally and select them from the connection screen
+- Protect saved passwords with the operating-system-backed Electron `safeStorage` API
+- Reuse password profiles without re-entering credentials; private-key profiles store only the key-file path
+- See live Ollama pull percentage and status updates while large models download
+- Receive an explicit dashboard error when an active SSH connection is lost
+
 ### 📊 Real-time telemetry
 
 - Live CPU utilization and temperature
@@ -52,7 +60,7 @@ Running a private AI server often means switching between SSH terminals, Docker 
 
 - Direct SSH connection from the desktop to the target host
 - No ShipAI account, hosted API, or third-party telemetry service
-- SSH and sudo credentials are held in memory for the active session only
+- Saved SSH passwords are encrypted with the local operating system credential store; sudo passwords remain session-only
 - Prompts, model traffic, and operational commands stay on your infrastructure
 
 ## Supported AI models
@@ -195,11 +203,36 @@ The packaged artifacts are written to `dist/`. The build configuration targets a
 5. Review the telemetry dashboard and hardware compatibility indicators.
 6. Install only the Docker services and Ollama models you intend to run.
 
+### Saved profile storage
+
+ShipAI stores profiles in `profiles.json` under Electron’s per-user application data directory. The persisted structure is:
+
+```json
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "generated-profile-id",
+      "name": "Production GPU server",
+      "host": "192.0.2.10",
+      "port": 22,
+      "username": "operator",
+      "authType": "password",
+      "keyPath": "",
+      "encryptedPassword": "OS-keychain-backed ciphertext",
+      "updatedAt": "2026-10-31T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+`encryptedPassword` is produced by Electron `safeStorage`; ShipAI never writes a plaintext SSH password to this file. For key-based profiles, only the configured private-key path is persisted and the key contents are read by the main process when connecting.
+
 ## Security model
 
 ShipAI is a desktop client that executes remote operations through the active SSH session. Treat the application and the connected server as a privileged administrative boundary.
 
-- **Credentials:** SSH and sudo credentials are entered for the active session and held in memory. Do not paste credentials into issues, logs, screenshots, shell history, or source files. Disconnect when finished.
+- **Credentials:** Saved SSH passwords use the operating system credential store through Electron `safeStorage`; sudo passwords and active connection secrets remain in memory for the session. Do not paste credentials into issues, logs, screenshots, shell history, or source files. Disconnect when finished.
 - **Transport:** SSH provides the encrypted transport. Validate host keys and use your normal SSH trust process; do not disable host verification to work around a warning.
 - **Privileges:** Use a least-privilege operator account with only the sudo rules required by your deployment policy. Docker access can effectively grant root-equivalent control on many Linux hosts.
 - **Remote changes:** Docker actions, Ollama installation/model pulls, and reboot/shutdown controls change the target host. Review the selected action and target before confirming it.

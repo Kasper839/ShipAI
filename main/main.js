@@ -1,9 +1,11 @@
 "use strict";
 
 const path = require("node:path");
+const fs = require("node:fs");
 const { app, BrowserWindow, ipcMain } = require("electron");
 const { Client } = require("ssh2");
 const { SshManager } = require("./sshManager");
+const profileStore = require("./profileStore");
 
 let mainWindow;
 let sshClient = null;
@@ -17,6 +19,10 @@ let environmentStatus = {
   error: "Environment initialization has not run."
 };
 
+const sendToRenderer = (channel, payload) => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+};
+
 const connectionError = (error) => {
   const code = error && typeof error === "object" ? error.code : "";
   const messages = {
@@ -28,6 +34,7 @@ const connectionError = (error) => {
     EAI_AGAIN: "The host name could not be resolved. Try again."
   };
   const message = messages[code] || (error instanceof Error ? error.message : String(error));
+  console.error("[SSH] connection failure", { code: code || "UNKNOWN", message });
   return new Error(message || "The SSH operation failed.");
 };
 
@@ -102,6 +109,12 @@ const initializeEnvironment = async () => {
 };
 
 const connectSsh = (credentials) => new Promise((resolve, reject) => {
+  console.log("[SSH] connecting", {
+    host: credentials.host,
+    port: credentials.port,
+    username: credentials.username,
+    authType: credentials.privateKey ? "private-key" : "password"
+  });
   closeSshConnection();
   environmentStatus = {
     initialized: false,
@@ -120,6 +133,13 @@ const connectSsh = (credentials) => new Promise((resolve, reject) => {
   const fail = (error) => {
     if (!settled) {
       settled = true;
+      console.error("[SSH] connection rejected", {
+        host: credentials.host,
+        port: credentials.port,
+        username: credentials.username,
+        authType: credentials.privateKey ? "private-key" : "password",
+        error: error instanceof Error ? error.message : String(error)
+      });
       cleanupFailedConnection();
       reject(connectionError(error));
     }
@@ -181,11 +201,17 @@ const connectSsh = (credentials) => new Promise((resolve, reject) => {
     if (settled) return;
     verifyRemoteExecution();
   });
-  client.once("error", fail);
+  client.once("error", (error) => {
+    console.error("[SSH] client error", { code: error?.code || "UNKNOWN", message: error?.message || String(error) });
+    fail(error);
+  });
   client.once("close", () => {
     if (sshClient === client) {
       sshClient = null;
       sshConnection = null;
+      sshManager.clearSession();
+      remoteStatusCache = { expiresAt: 0, value: null, pending: null };
+      sendToRenderer("ssh:connection-state", { state: "disconnected", reason: "The SSH connection was closed by the server or network." });
     }
   });
   timeoutId = setTimeout(() => fail(new Error("SSH connection timed out after 10 seconds.")), 10000);
@@ -218,11 +244,28 @@ const validateCredentials = (credentials) => {
   if (!host || host.length > 253) throw new Error("Enter a valid host or IP address.");
   if (!username || username.length > 128) throw new Error("Enter a valid username.");
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("SSH port must be between 1 and 65535.");
-  if (!credentials.password && !credentials.privateKey) throw new Error("A password or private key is required.");
+  if (!credentials.password && !credentials.privateKey && !credentials.privateKeyPath) throw new Error("A password or private key is required.");
+  let privateKey = typeof credentials.privateKey === "string" ? credentials.privateKey : "";
+  if (!privateKey && credentials.privateKeyPath) {
+    try {
+      privateKey = fs.readFileSync(credentials.privateKeyPath, "utf8");
+    } catch (error) {
+      throw new Error(`Unable to read the private key: ${error.message}`);
+    }
+  }
+  const password = typeof credentials.password === "string" ? credentials.password : "";
   const sudoPassword = typeof credentials.sudoPassword === "string" && credentials.sudoPassword.length > 0
     ? credentials.sudoPassword
-    : (typeof credentials.password === "string" ? credentials.password : "");
-  return { ...credentials, host, username, port, sudoPassword };
+    : password;
+  console.log("[SSH] validated credentials", {
+    host,
+    port,
+    username,
+    authType: privateKey ? "private-key" : "password",
+    passwordLength: password.length,
+    hasSudoPassword: Boolean(sudoPassword)
+  });
+  return { ...credentials, host, username, port, password, privateKey, sudoPassword };
 };
 
 const parseTemperature = (output) => {
@@ -463,8 +506,9 @@ const buildDeployment = (configuration) => {
   if (configuration.type === "model") {
     if (!deploymentModel(configuration.model)) throw new Error("Invalid AI model name.");
     return {
-      command: `sudo -S -p '' -v && if command -v ollama >/dev/null 2>&1; then echo 'Ollama is already installed.'; else echo 'Installing Ollama...'; curl -fsSL https://ollama.com/install.sh | sudo -n sh || exit $?; fi; sudo -n systemctl enable --now ollama 2>/dev/null || true; ollama pull ${shellQuote(configuration.model)} && nohup ollama run ${shellQuote(configuration.model)} >/tmp/shipai-ollama.log 2>&1 & echo 'Ollama model service started.'`,
-      requiresSudo: true
+      command: `sudo -S -p '' -v && if command -v ollama >/dev/null 2>&1; then echo 'Ollama is already installed.'; else echo 'Installing Ollama...'; curl -fsSL https://ollama.com/install.sh | sudo -n sh || exit $?; fi; sudo -n systemctl enable --now ollama 2>/dev/null || true; ollama pull ${shellQuote(configuration.model)} && (nohup ollama run ${shellQuote(configuration.model)} >/tmp/shipai-ollama.log 2>&1 &)`,
+      requiresSudo: true,
+      progressType: "ollama-pull"
     };
   }
   if (configuration.type !== "container" || !deploymentImage(configuration.image) || !aiInfrastructureImage(configuration.image)) {
@@ -489,13 +533,32 @@ const startDeployment = async (sender, command, jobId, sudoPassword = "") => {
   const send = (type, data) => {
     if (!sender.isDestroyed()) sender.send("ssh:deployment-log", { jobId, type, data: String(data) });
   };
+  const sendProgress = (payload) => {
+    if (!sender.isDestroyed()) sender.send("ssh:model-progress", { jobId, ...payload });
+  };
+  let lastPercent = -1;
   const result = await executeRemoteResult(command.command, {
-    timeoutMs: 300000,
+    timeoutMs: 900000,
     input: command.requiresSudo ? `${sudoPassword}\n` : "",
-    onStdout: (data) => send("stdout", data),
+    onStdout: (data) => {
+      send("stdout", data);
+      if (command.progressType === "ollama-pull") {
+        for (const match of data.matchAll(/(\d{1,3})%/g)) {
+          const percent = Math.max(0, Math.min(100, Number(match[1])));
+          if (percent !== lastPercent) {
+            lastPercent = percent;
+            sendProgress({ state: percent >= 100 ? "complete" : "downloading", percent, message: data.trim() });
+          }
+        }
+        if (lastPercent < 0) sendProgress({ state: "preparing", percent: 0, message: data.trim() });
+      }
+    },
     onStderr: (data) => send("stderr", data)
   });
   send(result.code === 0 ? "complete" : "error", result.code === 0 ? "Deployment completed." : result.stderr || "Deployment failed.");
+  if (command.progressType === "ollama-pull") {
+    sendProgress({ state: result.code === 0 ? "complete" : "error", percent: result.code === 0 ? 100 : Math.max(0, lastPercent), message: result.code === 0 ? "Model is ready." : result.stderr || "Model download failed." });
+  }
   if (result.code !== 0) throw new Error(result.stderr || "Remote deployment failed.");
   return { jobId, code: result.code };
 };
@@ -519,9 +582,32 @@ const createWindow = () => {
 };
 
 ipcMain.handle("ssh-connect", async (_event, rawCredentials) => {
-  const credentials = validateCredentials(rawCredentials);
-  return connectSsh(credentials);
+  try {
+    const profileId = typeof rawCredentials?.profileId === "string" ? rawCredentials.profileId : "";
+    const savedCredentials = profileId ? profileStore.getProfileCredentials(profileId) : {};
+    const credentials = validateCredentials({
+      ...savedCredentials,
+      ...rawCredentials,
+      port: rawCredentials?.port ?? savedCredentials.port,
+      password: rawCredentials?.password || savedCredentials.password,
+      privateKeyPath: rawCredentials?.privateKeyPath || savedCredentials.privateKeyPath
+    });
+    return await connectSsh(credentials);
+  } catch (error) {
+    console.error("[IPC] ssh-connect rejected", {
+      profileId: rawCredentials?.profileId || null,
+      host: rawCredentials?.host || null,
+      port: rawCredentials?.port || null,
+      username: rawCredentials?.username || null,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error instanceof Error ? error : new Error(String(error));
+  }
 });
+
+ipcMain.handle("profiles:list", () => profileStore.listProfiles());
+ipcMain.handle("profiles:save", (_event, profile) => profileStore.saveProfile(profile));
+ipcMain.handle("profiles:delete", (_event, id) => profileStore.deleteProfile(id));
 
 ipcMain.handle("ssh:telemetry", async () => getTelemetry());
 ipcMain.handle("ssh:get-telemetry", async () => {
@@ -580,7 +666,10 @@ ipcMain.handle("ssh:deploy-service", async (event, configuration) => {
     throw new Error("A sudo password is required to install Ollama.");
   }
   startDeployment(event.sender, command, jobId, sudoPassword || "").catch((error) => {
-    if (!event.sender.isDestroyed()) event.sender.send("ssh:deployment-log", { jobId, type: "error", data: error.message });
+    if (!event.sender.isDestroyed()) {
+      event.sender.send("ssh:deployment-log", { jobId, type: "error", data: error.message });
+      if (command.progressType === "ollama-pull") event.sender.send("ssh:model-progress", { jobId, state: "error", percent: 0, message: error.message });
+    }
   });
 
   return { jobId, started: true };

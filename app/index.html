@@ -27,6 +27,22 @@
 
         <form id="connection-form" class="form-stack" novalidate>
           <div class="form-field">
+            <label for="profile-select">Saved server profile</label>
+            <div class="profile-row">
+              <select id="profile-select" class="form-select">
+                <option value="">New connection</option>
+              </select>
+              <button id="delete-profile" class="button button-secondary button-small" type="button" disabled>Delete</button>
+            </div>
+            <p class="field-error" data-error-for="profile-select"></p>
+          </div>
+
+          <div class="form-field">
+            <label for="profile-name">Profile name <span class="field-hint">(optional)</span></label>
+            <input id="profile-name" name="profileName" type="text" maxlength="80" placeholder="Production GPU server" />
+          </div>
+
+          <div class="form-field">
             <label for="host" data-i18n="host">Host or IP address</label>
             <input id="host" name="host" type="text" autocomplete="url" placeholder="server.example.com" required />
             <p class="field-error" data-error-for="host"></p>
@@ -47,8 +63,22 @@
 
           <div class="form-field">
             <label for="password" data-i18n="password">Password</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your SSH password" required />
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your SSH password" />
             <p class="field-error" data-error-for="password"></p>
+          </div>
+
+          <div class="form-field">
+            <label for="auth-type">Authentication method</label>
+            <select id="auth-type" class="form-select">
+              <option value="password">SSH password</option>
+              <option value="key">Private key file</option>
+            </select>
+          </div>
+
+          <div id="key-field" class="form-field" hidden>
+            <label for="key-path">Private key path</label>
+            <input id="key-path" name="keyPath" type="text" autocomplete="off" placeholder="C:\Users\you\.ssh\id_ed25519" />
+            <p class="field-error" data-error-for="key-path"></p>
           </div>
 
           <div class="form-field">
@@ -58,6 +88,7 @@
           </div>
 
           <p id="connection-message" class="form-message" role="status" aria-live="polite"></p>
+          <label class="save-profile-control"><input id="save-profile" type="checkbox" checked /> Save this server profile securely on this computer</label>
           <button id="connect-button" class="button button-primary button-full" type="submit">
             <span class="button-text" data-i18n="connect">Connect server</span>
             <span class="button-spinner" aria-hidden="true"></span>

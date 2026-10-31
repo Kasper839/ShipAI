@@ -4,6 +4,9 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("api", Object.freeze({
   connectSSH: (credentials) => ipcRenderer.invoke("ssh-connect", credentials),
+  listProfiles: () => ipcRenderer.invoke("profiles:list"),
+  saveProfile: (profile) => ipcRenderer.invoke("profiles:save", profile),
+  deleteProfile: (id) => ipcRenderer.invoke("profiles:delete", id),
   getTelemetry: () => ipcRenderer.invoke("ssh:telemetry"),
   getTelemetrySafe: () => ipcRenderer.invoke("ssh:get-telemetry"),
   checkHardware: () => ipcRenderer.invoke("ssh:check-hardware"),
@@ -26,6 +29,16 @@ contextBridge.exposeInMainWorld("api", Object.freeze({
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on("ssh:install-progress", handler);
     return () => ipcRenderer.removeListener("ssh:install-progress", handler);
+  },
+  onModelProgress: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on("ssh:model-progress", handler);
+    return () => ipcRenderer.removeListener("ssh:model-progress", handler);
+  },
+  onConnectionState: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on("ssh:connection-state", handler);
+    return () => ipcRenderer.removeListener("ssh:connection-state", handler);
   },
   restartContainer: (name) => ipcRenderer.invoke("ssh:restart-container", name),
   dockerAction: (action, name) => ipcRenderer.invoke("ssh:docker-action", { action, name }),

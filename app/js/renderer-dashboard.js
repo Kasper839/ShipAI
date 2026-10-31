@@ -7,7 +7,10 @@
     temperature: $("cpu-temperature"), ramUsage: $("ram-usage"), ramTotal: $("ram-total"),
     ramProgress: $("ram-progress"),
     refresh: $("refresh-button"), disconnect: $("disconnect-button"), error: $("dashboard-error"),
-    environmentWarning: $("environment-warning"), updated: $("charts-status")
+    environmentWarning: $("environment-warning"), updated: $("charts-status"),
+    chartCpuValue: $("chart-cpu-value"), chartRamValue: $("chart-ram-value"),
+    chartNetworkValue: $("chart-network-value"), chartDiskValue: $("chart-disk-value"),
+    storageList: $("storage-list")
   };
   const history = { cpu: [], ram: [], network: [], disk: [] };
   let refreshInFlight = false;
@@ -26,7 +29,11 @@
   };
   const addHistoryPoint = (key, value) => { if (Number.isFinite(value)) history[key].push(value); if (history[key].length > 30) history[key].shift(); };
   const renderChart = (id, values, color, min = null, max = null) => {
-    const chart = $(id); if (!chart || !values.length) return;
+    const chart = $(id); if (!chart) return;
+    if (!values.length) {
+      chart.innerHTML = '<path d="M 0 96 H 320 M 0 57 H 320 M 0 18 H 320" stroke="#e2e8f0" stroke-width="1" fill="none"/>';
+      return;
+    }
     const lower = min ?? Math.min(...values); const upper = max ?? Math.max(...values); const range = upper - lower || 1;
     const points = values.map((value, index) => `${values.length === 1 ? 160 : (index / (values.length - 1)) * 320},${96 - ((value - lower) / range) * 78}`).join(" ");
     chart.innerHTML = `<path d="M 0 96 H 320 M 0 57 H 320 M 0 18 H 320" stroke="#e2e8f0" stroke-width="1" fill="none"/><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -61,7 +68,9 @@
     elements.environmentWarning.textContent = `AI runtime environment is incomplete.${missing} ${environment.error || ""}`.trim(); elements.environmentWarning.hidden = false;
   };
   const renderStorage = (disk) => {
-    const root = $("storage-list"); root.replaceChildren();
+    const root = elements.storageList;
+    if (!root) return;
+    root.replaceChildren();
     if (!disk.filesystems?.length) { root.textContent = "Filesystem telemetry is unavailable."; return; }
     disk.filesystems.forEach((filesystem) => {
       const item = document.createElement("article"); item.className = "storage-item";
@@ -132,14 +141,24 @@
 
   const updateHardwareStatus = async () => { try { hardware = await window.api.checkHardware(); if (catalogue.length) renderCatalogue(); } catch (error) { hardware = null; showError(error); } };
   const appendDeploymentLog = (entry) => { const log = $("deployment-log"); log.hidden = false; log.textContent += `${entry.data}\n`; log.scrollTop = log.scrollHeight; };
+  const updateModelProgress = (payload) => {
+    const panel = $("model-progress");
+    const percent = Number.isFinite(payload.percent) ? Math.max(0, Math.min(100, payload.percent)) : 0;
+    panel.hidden = false;
+    $("model-progress-percent").textContent = `${percent}%`;
+    $("model-progress-status").textContent = payload.message || (payload.state === "complete" ? "Model is ready." : "Downloading model...");
+    $("model-progress-value").style.width = `${percent}%`;
+    panel.querySelector(".progress-track").setAttribute("aria-valuenow", String(percent));
+    if (payload.state === "complete" || payload.state === "error") window.setTimeout(() => { panel.hidden = true; }, 2500);
+  };
   const refresh = async () => {
     if (refreshInFlight) return; refreshInFlight = true; elements.refresh.disabled = true;
     try {
       const telemetry = await window.api.getTelemetry(); elements.error.hidden = true; elements.temperature.textContent = telemetry.cpuTemperatureC === null ? "N/A" : telemetry.cpuTemperatureC.toFixed(1);
-      if (telemetry.cpuUsagePercent !== null) { addHistoryPoint("cpu", telemetry.cpuUsagePercent); $("chart-cpu-value").textContent = `${telemetry.cpuUsagePercent}%`; }
-      if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); $("chart-network-value").textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
-      if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); $("chart-ram-value").textContent = `${telemetry.memory.usagePercent}%`; }
-      if (telemetry.disk) { const diskRate = (telemetry.disk.readBytesPerSecond || 0) + (telemetry.disk.writeBytesPerSecond || 0); addHistoryPoint("disk", diskRate); $("chart-disk-value").textContent = `${(diskRate / 1024 / 1024).toFixed(1)} MB/s`; renderStorage(telemetry.disk); }
+      if (telemetry.cpuUsagePercent !== null) { addHistoryPoint("cpu", telemetry.cpuUsagePercent); elements.chartCpuValue.textContent = `${telemetry.cpuUsagePercent}%`; }
+      if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); elements.chartNetworkValue.textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
+      if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); elements.chartRamValue.textContent = `${telemetry.memory.usagePercent}%`; }
+      if (telemetry.disk) { const diskRate = (telemetry.disk.readBytesPerSecond || 0) + (telemetry.disk.writeBytesPerSecond || 0); addHistoryPoint("disk", diskRate); elements.chartDiskValue.textContent = `${(diskRate / 1024 / 1024).toFixed(1)} MB/s`; renderStorage(telemetry.disk); }
       renderChart("cpu-chart", history.cpu, "#4f46e5", 0, 100); renderChart("ram-chart", history.ram, "#0f766e", 0, 100); renderChart("network-chart", history.network, "#b45309"); renderChart("disk-chart", history.disk, "#db2777"); renderEnvironmentStatus(telemetry.environment); updateModelStatus(telemetry.ollama?.models || []); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
     } catch (error) { showError(error); } finally { elements.refresh.disabled = false; refreshInFlight = false; }
   };
@@ -157,6 +176,6 @@
   $("restart-server").addEventListener("click", () => requestPowerAction("restart", "reboot"));
   $("shutdown-server").addEventListener("click", () => requestPowerAction("shutdown", "shutdown"));
   $("start-chat")?.addEventListener("click", () => { $("chat-panel").hidden = false; $("chat-prompt").focus(); });
-  window.api.onDeploymentLog(appendDeploymentLog); window.api.onInstallProgress(appendDeploymentLog); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
+  window.api.onDeploymentLog(appendDeploymentLog); window.api.onInstallProgress(appendDeploymentLog); window.api.onModelProgress(updateModelProgress); window.api.onConnectionState((payload) => { showError(new Error(payload.reason || "SSH connection lost.")); window.clearInterval(refreshTimer); }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();
