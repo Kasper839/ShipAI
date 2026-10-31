@@ -81,14 +81,6 @@
       updateModelProgress({ model: "active model", message: entry.data || "Receiving download status..." });
     }
   };
-  const handleTaskChatChunk = (payload) => {
-    const state = [...taskTabs.values()].find((task) => task.requestId === payload.requestId);
-    if (!state) return;
-    if (payload.type === "token" && state.response) state.response.textContent += payload.data;
-    if (payload.type === "error" && state.response) state.response.textContent += `\nError: ${payload.data}`;
-    if (payload.type === "done" || payload.type === "error") state.view.querySelector("[data-task-memory]").textContent = "Idle";
-    state.view.querySelector("[data-task-messages]").scrollTop = state.view.querySelector("[data-task-messages]").scrollHeight;
-  };
   const openTaskChat = (state) => {
     setChatModel(state.model.ollama);
     setDashboardTab("ai-chat");
@@ -96,6 +88,9 @@
   const setDashboardTab = (name) => {
     document.querySelectorAll("[data-dashboard-tab]").forEach((tab) => { const active = tab.dataset.dashboardTab === name; tab.classList.toggle("is-active", active); tab.setAttribute("aria-selected", String(active)); });
     document.querySelectorAll("[data-dashboard-view]").forEach((view) => { const active = view.dataset.dashboardView === name; view.hidden = !active; view.classList.toggle("hidden", !active); });
+    $("dashboard-heading").hidden = name === "ai-chat";
+    document.querySelector(".dashboard-layout").classList.toggle("is-chat-studio", name === "ai-chat");
+    $("model-progress").hidden = name === "ai-chat" || $("model-progress").dataset.active !== "true";
     if (name === "overview" || name === "docker") void ensureDockerAccess();
     if (name === "marketplace" || name === "ai-chat") void refreshInstalledModels();
   };
@@ -214,7 +209,7 @@
     activeDownloadModel = model.name;
     updateModelProgress({ model: model.name, state: "preparing", percent: 0, message: "Starting Ollama pull..." });
     button.disabled = true; button.textContent = "Pulling...";
-    try { const result = await window.api.deployService({ type: "model", model: model.ollama }); task.jobId = result.jobId; task.view.querySelector("[data-task-status]").textContent = "Download started over SSH."; showToast(`Pull started for ${model.name}`); }
+    try { const result = await window.api.deployService({ type: "model", model: model.ollama }); task.jobId = result.jobId; showToast(`Pull started for ${model.name}`); }
     catch (error) { showError(error); button.disabled = false; button.textContent = "Download"; }
   };
   const removeModel = async (model, button) => {
@@ -226,7 +221,7 @@
     const task = createTaskTab(model);
     openTaskChat(task);
     button.disabled = true;
-    try { await window.api.runModel(model.ollama); task.view.querySelector("[data-task-status]").textContent = "Model is running. Send a prompt below."; showToast(`Spuštění modelu ${model.name} bylo zahájeno.`); }
+    try { await window.api.runModel(model.ollama); showToast(`Spuštění modelu ${model.name} bylo zahájeno.`); }
     catch (error) { showError(error); }
     finally { button.disabled = false; }
   };
@@ -273,6 +268,7 @@
     const percent = Number.isFinite(payload.percent) ? Math.max(0, Math.min(100, payload.percent)) : 0;
     if (payload.model) activeDownloadModel = payload.model;
     panel.hidden = false;
+    panel.dataset.active = payload.state !== "complete" && payload.state !== "error" ? "true" : "false";
     $("model-progress-model").textContent = activeDownloadModel || "Model download";
     $("model-progress-percent").textContent = `${percent}%`;
     const message = payload.message || "";
@@ -300,10 +296,51 @@
     } catch (error) { showError(error); } finally { elements.refresh.disabled = false; refreshInFlight = false; }
   };
 
+  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character]));
+  const markdownToHtml = (value, streaming = false) => {
+    let html = escapeHtml(value);
+    html = html.replace(/```([\w+-]*)\n?([\s\S]*?)(?:```|$)/g, (_match, language, code) => `<pre class="chat-code"><button type="button" class="copy-code" data-code="${encodeURIComponent(code)}">Copy Code</button><code class="language-${language || "text"}">${code}</code></pre>`);
+    html = html.replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>");
+    return streaming ? html : html;
+  };
+  const bindCopyButtons = (root) => root.querySelectorAll(".copy-code").forEach((button) => button.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(decodeURIComponent(button.dataset.code));
+    button.textContent = "Copied";
+  }));
+
   const initializeChat = () => {
     $("chat-model-select").addEventListener("change", (event) => { setChatModel(event.target.value); $("chat-messages").replaceChildren(); });
-    window.api.onChatChunk((payload) => { if (payload.requestId) return; if (payload.type === "token" && chatResponse) chatResponse.textContent += payload.data; if (payload.type === "error" && chatResponse) chatResponse.textContent += `\nError: ${payload.data}`; if (payload.type === "done" || payload.type === "error") $("chat-memory").textContent = "Idle"; $("chat-messages").scrollTop = $("chat-messages").scrollHeight; });
-    $("chat-form").addEventListener("submit", async (event) => { event.preventDefault(); if (!chatModel) return; const input = $("chat-prompt"); const prompt = input.value.trim(); if (!prompt) return; const messages = $("chat-messages"); const user = document.createElement("div"); user.className = "chat-message chat-message--user"; user.textContent = prompt; messages.append(user); chatResponse = document.createElement("div"); chatResponse.className = "chat-message chat-message--assistant"; messages.append(chatResponse); input.value = ""; $("chat-send").disabled = true; $("chat-memory").textContent = "Responding"; try { await window.api.sendChatPrompt(chatModel, prompt); } catch (error) { chatResponse.textContent = `Error: ${error.message}`; } finally { $("chat-send").disabled = false; $("chat-memory").textContent = "Idle"; } });
+    $("clear-chat").addEventListener("click", () => { $("chat-messages").replaceChildren(); chatResponse = null; });
+    const input = $("chat-prompt");
+    input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = `${Math.min(input.scrollHeight, 180)}px`; });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("chat-form").requestSubmit(); } });
+    $("chat-stop").addEventListener("click", async () => {
+      if (!chatResponse?.requestId) return;
+      await window.api.cancelChat(chatResponse.requestId);
+      $("chat-memory").textContent = "Stopped";
+      $("chat-stop").hidden = true;
+      $("chat-send").disabled = !chatModel;
+    });
+    window.api.onChatChunk((payload) => {
+      if (payload.requestId !== chatResponse?.requestId) return;
+      if (payload.type === "token") chatResponse.querySelector(".chat-markdown").insertAdjacentHTML("beforeend", markdownToHtml(payload.data, true));
+      if (payload.type === "error") chatResponse.querySelector(".chat-markdown").insertAdjacentHTML("beforeend", `<p class="chat-error">${escapeHtml(payload.data)}</p>`);
+      if (payload.type === "done" || payload.type === "error") { chatResponse.streaming = false; bindCopyButtons(chatResponse); $("chat-memory").textContent = "Idle"; $("chat-stop").hidden = true; $("chat-send").disabled = !chatModel; }
+      $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+    });
+    $("chat-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!chatModel || chatResponse?.streaming) return;
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      const messages = $("chat-messages");
+      const user = document.createElement("article"); user.className = "chat-message chat-message--user"; user.textContent = prompt; messages.append(user);
+      chatResponse = document.createElement("article"); chatResponse.className = "chat-message chat-message--assistant"; chatResponse.requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; chatResponse.streaming = true; chatResponse.innerHTML = '<div class="chat-markdown"></div>'; messages.append(chatResponse);
+      input.value = ""; input.style.height = "auto"; $("chat-send").disabled = true; $("chat-stop").hidden = false; $("chat-memory").textContent = "Responding";
+      try { await window.api.sendChatPrompt(chatModel, prompt, chatResponse.requestId); }
+      catch (error) { chatResponse.querySelector(".chat-markdown").innerHTML = `<p class="chat-error">${escapeHtml(error.message)}</p>`; }
+      finally { chatResponse.streaming = false; $("chat-send").disabled = !chatModel; $("chat-stop").hidden = true; $("chat-memory").textContent = "Idle"; }
+    });
   };
   $("dashboard-tabs").addEventListener("click", (event) => {
     const tab = event.target.closest("[data-dashboard-tab]");
@@ -325,6 +362,6 @@
   $("restart-server").addEventListener("click", () => requestPowerAction("restart", "reboot"));
   $("shutdown-server").addEventListener("click", () => requestPowerAction("shutdown", "shutdown"));
   $("start-chat")?.addEventListener("click", () => { $("chat-panel").hidden = false; $("chat-prompt").focus(); });
-  window.api.onDeploymentLog((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onChatChunk(handleTaskChatChunk); window.api.onConnectionState((payload) => { showError(new Error(payload.reason || "SSH connection lost.")); window.clearInterval(refreshTimer); }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
+  window.api.onDeploymentLog((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); document.querySelector(".dashboard-layout").hidden = true; $("connection-lost-view").hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();

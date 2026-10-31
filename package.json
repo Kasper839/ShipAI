@@ -17,7 +17,7 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.shipai.desktop",
+    "appId": "com.kasper839.shipai",
     "productName": "ShipAI",
     "files": [
       "app/**/*",
@@ -41,8 +41,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "shortcutName": "ShipAI",
       "multiLanguageInstaller": true,
-      "language": 1033
+      "language": 1033,
+      "displayLanguageSelector": true
     }
   }
 }

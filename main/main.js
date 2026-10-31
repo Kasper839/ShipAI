@@ -2,7 +2,7 @@
 
 const path = require("node:path");
 const fs = require("node:fs");
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, Notification, ipcMain } = require("electron");
 const { Client } = require("ssh2");
 const { SshManager } = require("./sshManager");
 const profileStore = require("./profileStore");
@@ -23,6 +23,15 @@ let environmentStatus = {
 
 const sendToRenderer = (channel, payload) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+};
+
+const notifyModelDownload = (success, message) => {
+  if (Notification.isSupported()) {
+    new Notification({
+      title: success ? "ShipAI: model ready" : "ShipAI: model download failed",
+      body: message
+    }).show();
+  }
 };
 
 const connectionError = (error) => {
@@ -617,7 +626,10 @@ const startDeployment = async (sender, command, jobId, sudoPassword = "") => {
   });
   send(result.code === 0 ? "complete" : "error", result.code === 0 ? "Deployment completed." : result.stderr || "Deployment failed.");
   if (command.progressType === "ollama-pull") {
-    sendProgress({ state: result.code === 0 ? "complete" : "error", percent: result.code === 0 ? 100 : Math.max(0, lastPercent), message: result.code === 0 ? "Model is ready." : result.stderr || "Model download failed." });
+    const success = result.code === 0;
+    const message = success ? "Model is ready." : result.stderr || "Model download failed.";
+    sendProgress({ state: success ? "complete" : "error", percent: success ? 100 : Math.max(0, lastPercent), message });
+    notifyModelDownload(success, message);
   }
   if (result.code !== 0) throw new Error(result.stderr || "Remote deployment failed.");
   return { jobId, code: result.code };
@@ -695,6 +707,7 @@ ipcMain.handle("ssh:chat", async (event, request) => {
     `curl -fsS -N --max-time 1800 http://127.0.0.1:11434/api/generate -H 'Content-Type: application/json' --data ${shellQuote(body)}`,
     {
       timeoutMs: 1800000,
+      requestId: request.requestId,
       onStdout: (data) => {
         buffer += data;
         const lines = buffer.split(/\r?\n/);
@@ -716,6 +729,11 @@ ipcMain.handle("ssh:chat", async (event, request) => {
     throw new Error(result.stderr || "Ollama request failed.");
   }
   return { success: true };
+});
+
+ipcMain.handle("ssh:cancel-chat", (_event, requestId) => {
+  if (typeof requestId !== "string" || requestId.length > 128) throw new Error("Invalid chat request ID.");
+  return { cancelled: sshManager.cancel(requestId) };
 });
 
 ipcMain.handle("ssh:deploy-service", async (event, configuration) => {

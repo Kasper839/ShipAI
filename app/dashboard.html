@@ -43,7 +43,7 @@
           <span id="model-progress-value" class="progress-value" style="width: 0%"></span>
         </div>
       </section>
-      <div class="dashboard-heading">
+      <div id="dashboard-heading" class="dashboard-heading" data-dashboard-heading>
         <div>
           <div class="section-kicker">Server overview</div>
           <h1 data-i18n="dashboard">AI infrastructure dashboard</h1>
@@ -125,28 +125,25 @@
           </div>
         </section>
       </div>
-      <div class="dashboard-view" data-dashboard-view="ai-chat" hidden>
-        <section class="panel chat-panel chat-panel--dedicated" aria-labelledby="chat-title">
-          <div class="chat-header">
-            <div>
-              <div class="section-kicker">Local inference</div>
-              <h1 id="chat-title">AI Chat</h1>
+      <div class="dashboard-view chat-studio-view" data-dashboard-view="ai-chat" hidden>
+        <section class="chat-studio" aria-labelledby="chat-title">
+          <header class="chat-studio-header">
+            <div><h1 id="chat-title">AI Chat</h1></div>
+            <div class="chat-studio-actions">
+              <label class="chat-model-selector" for="chat-model-select"><span>Installed model</span><select id="chat-model-select" aria-label="Select Installed Model"><option value="">Loading installed models...</option></select></label>
+              <span id="chat-memory" class="status-badge status-badge--neutral">Idle</span>
+              <button id="clear-chat" class="button button-secondary" type="button">Clear Conversation</button>
             </div>
-            <label class="chat-model-selector" for="chat-model-select">
-              <span>Select Installed Model</span>
-              <select id="chat-model-select" aria-label="Select Installed Model">
-                <option value="">Loading installed models...</option>
-              </select>
-            </label>
-            <span id="chat-memory" class="status-badge status-badge--neutral">Idle</span>
-          </div>
+          </header>
           <div id="chat-empty-state" class="chat-empty-state">Select an installed Ollama model to start chatting.</div>
-          <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
-          <form id="chat-form" class="chat-form">
-            <label class="sr-only" for="chat-prompt">Message</label>
-            <input id="chat-prompt" type="text" placeholder="Ask your model..." autocomplete="off" required>
-            <button id="chat-send" class="button button-primary" type="submit" disabled>Send</button>
-          </form>
+          <div id="chat-messages" class="chat-messages chat-studio-messages" role="log" aria-live="polite"></div>
+          <div class="chat-composer-shell">
+            <form id="chat-form" class="chat-form chat-composer">
+              <label class="sr-only" for="chat-prompt">Message</label>
+              <textarea id="chat-prompt" rows="1" placeholder="Message your model..." autocomplete="off" required></textarea>
+              <div class="chat-composer-actions"><button id="chat-stop" class="button button-danger" type="button" hidden>Stop Generating</button><button id="chat-send" class="button button-primary" type="submit" disabled>Send</button></div>
+            </form>
+          </div>
         </section>
       </div>
     </main>
