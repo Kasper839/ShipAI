@@ -13,8 +13,8 @@
     containerCount: $("container-count"), tableBody: $("containers-table-body"),
     chartCpuValue: $("chart-cpu-value"), chartRamValue: $("chart-ram-value"),
     chartNetworkValue: $("chart-network-value"), chartDiskValue: $("chart-disk-value"),
-    storageList: $("storage-list"), vramActive: $("vram-active"), vramFreeable: $("vram-freeable"),
-    vramContext: $("vram-context"), vramProgress: $("vram-progress"), flushVram: $("flush-vram")
+    storageList: $("storage-list"), vramActive: $("active-vram"), vramFreeable: $("freeable-vram"),
+    vramContext: $("context-overhead"), vramProgress: $("vram-progress"), flushVram: $("flush-vram")
   };
   const refreshInstalledModels = async () => {
     try {
@@ -188,10 +188,12 @@
   const refreshVram = async () => {
     try {
       const status = await window.api.getOllamaVramStatus(4096);
-      elements.vramActive.textContent = `${formatBytes(status.activeVramBytes)} / ${formatBytes(status.totalVramBytes)}`;
-      elements.vramFreeable.textContent = formatBytes(status.freeableVramBytes);
-      elements.vramContext.textContent = formatBytes(status.estimatedContextOverheadBytes);
-      elements.vramProgress.style.width = `${status.totalVramBytes ? Math.min(100, status.activeVramBytes / status.totalVramBytes * 100) : 0}%`;
+      const active = Number(status.activeVramBytes);
+      const total = Number(status.totalVramBytes);
+      elements.vramActive.textContent = `${formatBytes(Number.isFinite(active) ? active : 0)} / ${formatBytes(Number.isFinite(total) ? total : 0)}`;
+      elements.vramFreeable.textContent = formatBytes(Number.isFinite(Number(status.freeableVramBytes)) ? Number(status.freeableVramBytes) : 0);
+      elements.vramContext.textContent = formatBytes(Number.isFinite(Number(status.estimatedContextOverheadBytes)) ? Number(status.estimatedContextOverheadBytes) : 0);
+      elements.vramProgress.style.width = `${total > 0 ? Math.min(100, active / total * 100) : 0}%`;
     } catch (error) {
       elements.vramActive.textContent = "N/A";
       elements.vramFreeable.textContent = "N/A";
@@ -291,7 +293,8 @@
     panel.hidden = false;
     panel.dataset.active = payload.state !== "complete" && payload.state !== "error" ? "true" : "false";
     $("download-model").textContent = activeDownloadModel || t("modelDownload", "Model download");
-    $("download-percent").textContent = `${Math.round(percent)}%`;
+    document.getElementById("download-percent").textContent = `${percent}%`;
+    document.getElementById("progress-bar-fill").style.width = `${percent}%`;
     const message = payload.message || "";
     const speedMbps = Number(payload.speedMbps);
     const speed = Number.isFinite(speedMbps) ? `${speedMbps.toFixed(2)} MB/s` : message.match(/(\d+(?:\.\d+)?\s*(?:KB|MB|GB)\/s)/i)?.[1];
@@ -304,7 +307,7 @@
     $("download-sizes").textContent = Number.isFinite(total) && total > 0 ? `${formatBytes(Number.isFinite(completed) ? completed : 0)} / ${formatBytes(total)}` : (size ? size[1] : (message || t("calculating", "Calculating transfer size...")));
     window.cancelAnimationFrame(downloadProgressFrame);
     downloadProgressFrame = window.requestAnimationFrame(() => {
-      $("progress-bar-fill").style.width = percent + "%";
+      document.getElementById("progress-bar-fill").style.width = percent + "%";
       panel.querySelector(".progress-track").setAttribute("aria-valuenow", String(percent));
     });
     if (payload.state === "complete") {
@@ -398,6 +401,20 @@
   $("shutdown-server").addEventListener("click", () => requestPowerAction("shutdown", "shutdown"));
   $("start-chat")?.addEventListener("click", () => { $("chat-panel").hidden = false; $("chat-prompt").focus(); });
   window.addEventListener("shipai:language-changed", () => { populateChatModels(); if (catalogue.length) renderCatalogue(); });
-  window.api.onOllamaPullProgress((payload) => { updateModelProgress({ ...payload, state: payload.status === "success" ? "complete" : "downloading" }); }); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); document.querySelector(".dashboard-layout").hidden = true; $("connection-lost-view").hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
+  const onPullProgress = (data) => {
+    const percent = Math.max(0, Math.min(100, Number(data.percent)));
+    if (!Number.isFinite(percent)) return;
+    document.getElementById("download-percent").textContent = `${percent}%`;
+    document.getElementById("progress-bar-fill").style.width = `${percent}%`;
+    const speedMbps = Number(data.speedMbps);
+    if (Number.isFinite(speedMbps)) document.getElementById("download-speed").textContent = `${speedMbps.toFixed(2)} MB/s`;
+    const total = Number(data.total || data.sizeBytes);
+    const completed = Number(data.completed);
+    if (Number.isFinite(total) && total > 0) {
+      document.getElementById("download-sizes").textContent = `${formatBytes(Number.isFinite(completed) ? completed : 0)} / ${formatBytes(total)}`;
+    }
+    updateModelProgress({ ...data, state: data.status === "success" ? "complete" : "downloading" });
+  };
+  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();

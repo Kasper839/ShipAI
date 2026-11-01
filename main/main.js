@@ -551,22 +551,45 @@ const ollamaApiCommand = (method = "GET", body = "", path = "ps") => {
   return `curl -fsS --max-time 1800 -X ${method} http://127.0.0.1:11434/api/${path}${bodyArgument}`;
 };
 const parseOllamaPs = (output) => {
-  const data = JSON.parse(output || "{\"models\":[]}");
+  let data;
+  try {
+    data = JSON.parse(String(output || "{\"models\":[]}").trim() || "{\"models\":[]}");
+  } catch {
+    return [];
+  }
   return Array.isArray(data.models) ? data.models.filter((model) => model && typeof model === "object") : [];
 };
-const getOllamaVramStatus = async () => {
+let ollamaVramCache = { expiresAt: 0, value: null, pending: null };
+const getOllamaVramStatus = async (contextTokens = 4096) => {
   if (!sshClient) throw new Error("No SSH connection is active.");
-  const [modelsOutput, gpuOutput] = await Promise.all([
+  const now = Date.now();
+  if (ollamaVramCache.value && ollamaVramCache.expiresAt > now) return ollamaVramCache.value;
+  if (ollamaVramCache.pending) return ollamaVramCache.pending;
+  ollamaVramCache.pending = Promise.allSettled([
     executeRemote(ollamaApiCommand(), { timeoutMs: 15000 }),
     executeRemote("if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=memory.total,memory.used,memory.free --format=csv,noheader,nounits; else exit 127; fi", { timeoutMs: 10000 })
-  ]);
-  const models = parseOllamaPs(modelsOutput);
-  const gpuRows = gpuOutput.split(/\r?\n/).map((line) => line.split(",").map((value) => Number.parseFloat(value.trim()) * 1024 ** 2))
-    .filter((row) => row.length >= 3 && row.every(Number.isFinite));
-  const totalVramBytes = gpuRows.reduce((sum, row) => sum + row[0], 0);
-  const usedGpuBytes = gpuRows.reduce((sum, row) => sum + row[1], 0);
-  const activeVramBytes = models.reduce((sum, model) => sum + Number(model.size_vram || 0), 0);
-  return { activeVramGb: activeVramBytes / 1024 ** 3, usedVramGb: usedGpuBytes / 1024 ** 3, totalVramGb: totalVramBytes / 1024 ** 3, freeVramGb: Math.max(0, totalVramBytes - usedGpuBytes) / 1024 ** 3, models, queriedAt: new Date().toISOString() };
+  ]).then(([modelsResult, gpuResult]) => {
+    const models = modelsResult.status === "fulfilled" ? parseOllamaPs(modelsResult.value) : [];
+    const gpuOutput = gpuResult.status === "fulfilled" ? gpuResult.value : "";
+    const gpuRows = gpuOutput.split(/\r?\n/).map((line) => line.split(",").map((value) => Number.parseFloat(value.trim()) * 1024 ** 2))
+      .filter((row) => row.length >= 3 && row.every(Number.isFinite));
+    const totalVramBytes = gpuRows.reduce((sum, row) => sum + row[0], 0);
+    const usedGpuBytes = gpuRows.reduce((sum, row) => sum + row[1], 0);
+    const activeVramBytes = models.reduce((sum, model) => sum + Number(model.size_vram || 0), 0);
+    const value = {
+      activeVramBytes, usedVramBytes: usedGpuBytes, totalVramBytes,
+      freeVramBytes: Math.max(0, totalVramBytes - usedGpuBytes),
+      freeableVramBytes: Math.max(0, totalVramBytes - activeVramBytes),
+      estimatedContextOverheadBytes: Math.max(0, Number(contextTokens) || 0) * 1024,
+      activeVramGb: activeVramBytes / 1024 ** 3,
+      totalVramGb: totalVramBytes / 1024 ** 3,
+      freeableVramGb: Math.max(0, totalVramBytes - activeVramBytes) / 1024 ** 3,
+      models, queriedAt: new Date().toISOString()
+    };
+    ollamaVramCache = { value, expiresAt: Date.now() + 5000, pending: null };
+    return value;
+  }).finally(() => { ollamaVramCache.pending = null; });
+  return ollamaVramCache.pending;
 };
 
 const buildDeployment = (configuration) => {
@@ -772,7 +795,7 @@ ipcMain.handle("ssh:run-model", async (_event, model) => {
   return { model, started: true };
 });
 
-ipcMain.handle("ollama:get-vram-status", async () => getOllamaVramStatus());
+ipcMain.handle("ollama:get-vram-status", async (_event, request) => getOllamaVramStatus(request?.contextTokens));
 
 ipcMain.handle("ollama:flush-vram", async () => {
   if (!sshClient) throw new Error("No SSH connection is active.");
@@ -782,6 +805,7 @@ ipcMain.handle("ollama:flush-vram", async () => {
     if (!deploymentModel(name)) return Promise.resolve();
     return executeRemote(ollamaApiCommand("POST", JSON.stringify({ model: name, prompt: "", keep_alive: 0 }), "generate"), { timeoutMs: 15000 });
   }));
+  ollamaVramCache = { expiresAt: 0, value: null, pending: null };
   remoteStatusCache.expiresAt = 0;
   return { unloaded: models.length, unloadedAt: new Date().toISOString() };
 });
@@ -864,6 +888,7 @@ ipcMain.handle("ssh:docker-action", async (_event, request) => {
 
 ipcMain.handle("ssh:disconnect", () => {
   closeSshConnection();
+  ollamaVramCache = { expiresAt: 0, value: null, pending: null };
   return true;
 });
 
