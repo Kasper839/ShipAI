@@ -14,7 +14,8 @@
     chartCpuValue: $("chart-cpu-value"), chartRamValue: $("chart-ram-value"),
     chartNetworkValue: $("chart-network-value"), chartDiskValue: $("chart-disk-value"),
     storageList: $("storage-list"), vramActive: $("active-vram"), vramFreeable: $("freeable-vram"),
-    vramContext: $("context-overhead"), vramProgress: $("vram-progress"), flushVram: $("flush-vram")
+    vramContext: $("context-overhead"), vramProgress: $("vram-progress"), flushVram: $("flush-vram"),
+    cancelDownload: $("cancel-download")
   };
   const refreshInstalledModels = async () => {
     try {
@@ -39,6 +40,8 @@
   let chatResponse = null;
   const taskTabs = new Map();
   let activeDownloadModel = "";
+  let activeDownloadJobId = "";
+  const cancelledDownloadJobs = new Set();
   let downloadProgressFrame = 0;
 
   const showError = (error) => { elements.error.textContent = error.message || "Unable to retrieve server telemetry."; elements.error.hidden = false; };
@@ -194,6 +197,11 @@
       elements.vramFreeable.textContent = formatBytes(Number.isFinite(Number(status.freeableVramBytes)) ? Number(status.freeableVramBytes) : 0);
       elements.vramContext.textContent = formatBytes(Number.isFinite(Number(status.estimatedContextOverheadBytes)) ? Number(status.estimatedContextOverheadBytes) : 0);
       elements.vramProgress.style.width = `${total > 0 ? Math.min(100, active / total * 100) : 0}%`;
+      const warning = $("environment-warning");
+      if (warning && Number.isFinite(total) && total > 0 && active > total) {
+        warning.hidden = false;
+        warning.textContent = "Active model memory exceeds available VRAM. Inference may fall back to system RAM or run slowly.";
+      }
     } catch (error) {
       elements.vramActive.textContent = "N/A";
       elements.vramFreeable.textContent = "N/A";
@@ -227,8 +235,9 @@
     const task = createTaskTab(model);
     activeDownloadModel = model.name;
     updateModelProgress({ model: model.name, state: "preparing", percent: 0, message: "Starting Ollama pull..." });
+    elements.cancelDownload.hidden = true;
     button.disabled = true; button.textContent = t("pulling", "Pulling...");
-    try { const result = await window.api.deployService({ type: "model", model: model.ollama }); task.jobId = result.jobId; showToast(`Pull started for ${model.name}`); }
+    try { const result = await window.api.deployService({ type: "model", model: model.ollama }); task.jobId = result.jobId; activeDownloadJobId = result.jobId; elements.cancelDownload.hidden = false; showToast(`Pull started for ${model.name}`); }
     catch (error) { showError(error); button.disabled = false; button.textContent = t("download", "Download"); }
   };
   const removeModel = async (model, button) => {
@@ -251,7 +260,7 @@
     const model = input.value.trim();
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_.\/:@-]{0,127}$/.test(model)) { showError(new Error("Zadejte platný název Ollama modelu.")); return; }
     button.disabled = true;
-    try { const task = createTaskTab({ name: model, ollama: model }); activeDownloadModel = model; updateModelProgress({ model, state: "preparing", percent: 0, message: "Starting Ollama pull..." }); const result = await window.api.deployService({ type: "model", model }); task.jobId = result.jobId; input.value = ""; showToast(`Stahování modelu ${model} bylo zahájeno.`); }
+    try { const task = createTaskTab({ name: model, ollama: model }); activeDownloadModel = model; updateModelProgress({ model, state: "preparing", percent: 0, message: "Starting Ollama pull..." }); elements.cancelDownload.hidden = true; const result = await window.api.deployService({ type: "model", model }); task.jobId = result.jobId; activeDownloadJobId = result.jobId; elements.cancelDownload.hidden = false; input.value = ""; showToast(`Stahování modelu ${model} bylo zahájeno.`); }
     catch (error) { showError(error); }
     finally { button.disabled = false; }
   };
@@ -290,8 +299,13 @@
     const percentValue = Number(payload.percent);
     const percent = Number.isFinite(percentValue) ? Math.max(0, Math.min(100, percentValue)) : 0;
     if (payload.model) activeDownloadModel = payload.model;
-    panel.hidden = false;
-    panel.dataset.active = payload.state !== "complete" && payload.state !== "error" ? "true" : "false";
+    const finished = payload.state === "complete" || payload.state === "error" || payload.state === "cancelled";
+    panel.hidden = finished && payload.state !== "complete";
+    panel.dataset.active = finished ? "false" : "true";
+    if (elements.cancelDownload) {
+      elements.cancelDownload.hidden = panel.hidden || panel.dataset.active !== "true";
+      elements.cancelDownload.disabled = false;
+    }
     $("download-model").textContent = activeDownloadModel || t("modelDownload", "Model download");
     document.getElementById("download-percent").textContent = `${percent}%`;
     document.getElementById("progress-bar-fill").style.width = `${percent}%`;
@@ -415,6 +429,6 @@
     }
     updateModelProgress({ ...data, state: data.status === "success" ? "complete" : "downloading" });
   };
-  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 3000);
+  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { const wasCancelled = cancelledDownloadJobs.has(payload.jobId); if (!wasCancelled) updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete" || payload.state === "error" || payload.state === "cancelled") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (payload.jobId === activeDownloadJobId) activeDownloadJobId = ""; if ((payload.state === "error" || payload.state === "cancelled") && task) taskTabs.delete(task.taskId); if (task && payload.state === "complete" && !wasCancelled) openTaskChat(task); if (payload.state === "error" && !wasCancelled && payload.message !== "Model download cancelled.") showError(new Error(payload.message || "Model download failed.")); if (payload.state === "complete" && !wasCancelled) void refreshInstalledModels(); if (wasCancelled) cancelledDownloadJobs.delete(payload.jobId); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); elements.cancelDownload?.addEventListener("click", async () => { const cancelledJobId = activeDownloadJobId; if (!cancelledJobId) return; cancelledDownloadJobs.add(cancelledJobId); const cancelledModel = activeDownloadModel; activeDownloadJobId = ""; const panel = $("model-progress"); panel.hidden = true; panel.dataset.active = "false"; elements.cancelDownload.hidden = true; elements.cancelDownload.disabled = true; const task = [...taskTabs.values()].find((item) => item.jobId === cancelledJobId); if (task) taskTabs.delete(task.taskId); try { await window.api.cancelOllamaPull(cancelledJobId); } catch { } showToast(`${cancelledModel || "Model"} download cancelled.`); }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 3000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();

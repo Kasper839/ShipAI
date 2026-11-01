@@ -51,6 +51,7 @@ class SshManager {
           }
           activeStream = stream;
           if (requestId) this.activeCommands.set(requestId, () => {
+            if (activeStream && typeof activeStream.close === "function") activeStream.close();
             if (activeStream && typeof activeStream.destroy === "function") activeStream.destroy();
           });
           const output = (chunk, target, listener) => {

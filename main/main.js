@@ -16,6 +16,8 @@ let sshConnection = null;
 const sshManager = new SshManager(() => sshClient);
 let remoteStatusCache = { expiresAt: 0, value: null, pending: null };
 let dockerRepairPending = null;
+const activeModelDownloads = new Map();
+const cancelledModelDownloads = new Set();
 let telemetryClient = null;
 let telemetryDistinctId = null;
 let environmentStatus = {
@@ -694,6 +696,7 @@ const startDeployment = async (sender, command, jobId, sudoPassword = "") => {
   const result = await executeRemoteResult(command.command, {
     timeoutMs: 900000,
     input: command.requiresSudo ? `${sudoPassword}\n` : "",
+    requestId: jobId,
     onStdout: (data) => {
       send("stdout", data);
       if (command.progressType === "ollama-pull") {
@@ -716,6 +719,7 @@ const startDeployment = async (sender, command, jobId, sudoPassword = "") => {
     sendProgress({ state: success ? "complete" : "error", percent: success ? 100 : Math.max(0, lastPercent), message });
     if (success) trackTelemetry("model_loaded", { model: command.model });
     notifyModelDownload(success, message);
+    activeModelDownloads.delete(jobId);
   }
   if (result.code !== 0) throw new Error(result.stderr || "Remote deployment failed.");
   return { jobId, code: result.code };
@@ -835,14 +839,46 @@ ipcMain.handle("ssh:deploy-service", async (event, configuration) => {
   if (command.requiresSudo && !sudoPassword) {
     throw new Error("A sudo password is required to install Ollama.");
   }
+  if (command.progressType === "ollama-pull") {
+    activeModelDownloads.set(jobId, { model: command.model, sender: event.sender });
+  }
   startDeployment(event.sender, command, jobId, sudoPassword || "").catch((error) => {
+    const wasCancelled = cancelledModelDownloads.delete(jobId);
+    activeModelDownloads.delete(jobId);
     if (!event.sender.isDestroyed()) {
-      event.sender.send("ssh:deployment-log", { jobId, type: "error", data: error.message });
-      if (command.progressType === "ollama-pull") event.sender.send("ssh:model-progress", { jobId, state: "error", percent: 0, message: error.message });
+      if (!wasCancelled) {
+        event.sender.send("ssh:deployment-log", { jobId, type: "error", data: error.message });
+        if (command.progressType === "ollama-pull") event.sender.send("ssh:model-progress", { jobId, state: "error", percent: 0, message: error.message });
+      }
     }
   });
 
   return { jobId, started: true };
+});
+
+ipcMain.handle("ollama:cancel-pull", async (_event, jobId) => {
+  if (typeof jobId !== "string" || !/^[0-9]+-[a-z0-9]+$/i.test(jobId)) {
+    throw new Error("Invalid download job.");
+  }
+  const download = activeModelDownloads.get(jobId);
+  if (!download) throw new Error("The download is no longer active.");
+  cancelledModelDownloads.add(jobId);
+  const modelPattern = `ollama pull ${download.model}`;
+  try {
+    await executeRemote(`pkill -TERM -f ${shellQuote(modelPattern)} || true`, { timeoutMs: 10000 });
+  } finally {
+    sshManager.cancel(jobId);
+    activeModelDownloads.delete(jobId);
+  }
+  if (!download.sender.isDestroyed()) {
+    download.sender.send("ssh:model-progress", {
+      jobId,
+      state: "cancelled",
+      percent: 0,
+      message: "Model download cancelled."
+    });
+  }
+  return { cancelled: true, jobId };
 });
 
 ipcMain.handle("ssh:remove-model", async (_event, model) => {

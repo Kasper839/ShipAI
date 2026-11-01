@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("api", Object.freeze({
   getOllamaVramStatus: (contextTokens) => ipcRenderer.invoke("ollama:get-vram-status", { contextTokens }),
   flushOllamaVram: () => ipcRenderer.invoke("ollama:flush-vram"),
   pullOllamaModel: (model) => ipcRenderer.invoke("ollama:pull-model", model),
+  cancelOllamaPull: (jobId) => ipcRenderer.invoke("ollama:cancel-pull", jobId),
   onOllamaPullProgress: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on("ollama:pull-progress", handler);
