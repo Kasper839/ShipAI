@@ -189,7 +189,7 @@
     try {
       const status = await window.api.getOllamaVramStatus(4096);
       const active = Number(status.activeVramBytes);
-      const total = Number(status.totalVramBytes);
+      const total = Number(status.totalModelBytes);
       elements.vramActive.textContent = `${formatBytes(Number.isFinite(active) ? active : 0)} / ${formatBytes(Number.isFinite(total) ? total : 0)}`;
       elements.vramFreeable.textContent = formatBytes(Number.isFinite(Number(status.freeableVramBytes)) ? Number(status.freeableVramBytes) : 0);
       elements.vramContext.textContent = formatBytes(Number.isFinite(Number(status.estimatedContextOverheadBytes)) ? Number(status.estimatedContextOverheadBytes) : 0);

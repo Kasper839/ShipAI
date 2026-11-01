@@ -578,11 +578,14 @@ const getOllamaVramStatus = async (contextTokens = 4096) => {
     const usedGpuBytes = gpuRows.reduce((sum, row) => sum + row[1], 0);
     const activeVramBytes = models.reduce((sum, model) => {
       const sizeVram = Number(model.size_vram);
+      return sum + (Number.isFinite(sizeVram) && sizeVram > 0 ? sizeVram : 0);
+    }, 0);
+    const totalModelBytes = models.reduce((sum, model) => {
       const size = Number(model.size);
-      return sum + (Number.isFinite(sizeVram) && sizeVram > 0 ? sizeVram : (Number.isFinite(size) && size > 0 ? size : 0));
+      return sum + (Number.isFinite(size) && size > 0 ? size : 0);
     }, 0);
     const value = {
-      activeVramBytes, usedVramBytes: usedGpuBytes, totalVramBytes,
+      activeVramBytes, totalModelBytes, usedVramBytes: usedGpuBytes, totalVramBytes,
       freeVramBytes: Math.max(0, totalVramBytes - usedGpuBytes),
       freeableVramBytes: Math.max(0, totalVramBytes - activeVramBytes),
       estimatedContextOverheadBytes: Math.max(0, Number(contextTokens) || 0) * 1024,
