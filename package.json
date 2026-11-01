@@ -7,7 +7,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "package": "electron-builder"
+    "package": "electron-builder",
+    "check": "node --check main/main.js && node --check main/profileStore.js && node --check main/sshManager.js && node --check preload.js && node --check app/js/renderer-dashboard.js && node --check app/js/renderer-login.js"
   },
   "dependencies": {
     "posthog-node": "^5.61.1",

@@ -93,7 +93,7 @@
     document.querySelectorAll("[data-dashboard-view]").forEach((view) => { const active = view.dataset.dashboardView === name; view.hidden = !active; view.classList.toggle("hidden", !active); });
     document.querySelector(".dashboard-layout").classList.toggle("is-chat-studio", name === "ai-chat");
     $("model-progress").hidden = name === "ai-chat" || $("model-progress").dataset.active !== "true";
-    if (name === "overview" || name === "docker") void ensureDockerAccess();
+    if (name === "overview") void ensureDockerAccess();
     if (name === "marketplace" || name === "ai-chat") void refreshInstalledModels();
   };
   const addHistoryPoint = (key, value) => { if (Number.isFinite(value)) history[key].push(value); if (history[key].length > 30) history[key].shift(); };
@@ -415,6 +415,6 @@
     }
     updateModelProgress({ ...data, state: data.status === "success" ? "complete" : "downloading" });
   };
-  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
+  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 3000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();

@@ -648,7 +648,7 @@ const getOllamaVramStatus = async (contextTokens = 4096) => {
       freeableVramGb: Math.max(0, totalVramBytes - activeVramBytes) / 1024 ** 3,
       models, queriedAt: new Date().toISOString()
     };
-    ollamaVramCache = { value, expiresAt: Date.now() + 5000, pending: null };
+    ollamaVramCache = { value, expiresAt: Date.now() + 10000, pending: null };
     return value;
   }).finally(() => { ollamaVramCache.pending = null; });
   return ollamaVramCache.pending;

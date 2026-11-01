@@ -10,7 +10,7 @@
 
 > **Your server. Your models. Your session.**
 >
-> ShipAI connects directly from your desktop to your Linux host over encrypted SSH. It is not a cloud proxy, SaaS dashboard, or telemetry collector.
+> ShipAI connects directly from your desktop to your Linux host over encrypted SSH. It is not a cloud proxy or SaaS dashboard. Optional anonymous lifecycle telemetry is disabled unless `POSTHOG_API_KEY` is configured.
 
 ## Why ShipAI?
 
