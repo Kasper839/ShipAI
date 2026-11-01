@@ -789,34 +789,43 @@ ipcMain.handle("ollama:flush-vram", async () => {
 ipcMain.handle("ollama:pull-model", async (event, model) => {
   if (!sshClient || !deploymentModel(model)) throw new Error("A valid Ollama model is required.");
   let buffer = "";
-  let startedAt = Date.now();
+  const startedAt = Date.now();
+  const sendProgress = (progress) => {
+    if (!event.sender.isDestroyed()) event.sender.send("ollama:pull-progress", progress);
+  };
+  const emitLine = (line) => {
+    try {
+      const progress = JSON.parse(line);
+      const total = Number(progress.total) || 0;
+      const completed = Number(progress.completed) || 0;
+      const elapsed = Math.max(0.001, (Date.now() - startedAt) / 1000);
+      const speedBytesPerSecond = completed / elapsed;
+      sendProgress({
+        model,
+        status: progress.status || "downloading",
+        completed,
+        total,
+        percent: total ? Math.min(100, completed / total * 100) : 0,
+        speedMbps: speedBytesPerSecond / 1024 ** 2,
+        etaSeconds: speedBytesPerSecond > 0 && total > completed ? (total - completed) / speedBytesPerSecond : 0,
+        sizeBytes: total
+      });
+    } catch (error) {
+      console.warn("[Ollama] Invalid pull progress:", error.message);
+    }
+  };
   const result = await executeRemoteResult(ollamaApiCommand("POST", JSON.stringify({ model, stream: true }), "pull"), {
     timeoutMs: 1800000,
     onStdout: (chunk) => {
       buffer += chunk;
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() || "";
-      lines.filter(Boolean).forEach((line) => {
-        try {
-          const progress = JSON.parse(line);
-          const total = Number(progress.total) || 0;
-          const completed = Number(progress.completed) || 0;
-          const elapsed = Math.max(0.001, (Date.now() - startedAt) / 1000);
-          const speed = completed / elapsed;
-          event.sender.send("ollama:pull-progress", {
-            model, status: progress.status || "downloading", completed, total,
-            percent: total ? Math.min(100, completed / total * 100) : 0,
-            speedMbps: speed / 1024 ** 2,
-            etaSeconds: speed > 0 && total > completed ? (total - completed) / speed : 0,
-            sizeBytes: total
-          });
-        } catch (error) {
-          console.warn("[Ollama] Invalid pull progress:", error.message);
-        }
-      });
+      lines.filter(Boolean).forEach(emitLine);
     }
   });
+  if (buffer.trim()) emitLine(buffer.trim());
   if (result.code !== 0) throw new Error(result.stderr || "Ollama model pull failed.");
+  sendProgress({ model, status: "success", completed: 1, total: 1, percent: 100, speedMbps: 0, etaSeconds: 0, sizeBytes: 1 });
   remoteStatusCache.expiresAt = 0;
   return { model, completed: true };
 });

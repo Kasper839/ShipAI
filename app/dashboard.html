@@ -32,15 +32,15 @@
     <main class="dashboard-layout">
       <section id="model-progress" class="model-progress model-progress--top" hidden data-i18n-aria-label="modelProgress" aria-label="Model download progress">
         <div class="model-progress-heading">
-          <strong id="model-progress-model" data-i18n="preparingDownload">Preparing model download</strong>
-          <strong id="model-progress-percent" aria-live="polite">0%</strong>
+          <strong id="download-model" data-i18n="preparingDownload">Preparing model download</strong>
+          <strong id="download-percent" aria-live="polite">0%</strong>
         </div>
         <div class="model-progress-details">
-          <span id="model-progress-speed" data-i18n="waitingTransfer">Waiting for transfer</span>
-          <span id="model-progress-size">0 B / —</span>
+          <span id="download-speed" data-i18n="waitingTransfer">Waiting for transfer</span>
+          <span id="download-sizes">0 B / —</span>
         </div>
         <div class="progress-track model-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-          <span id="model-progress-value" class="progress-value" style="width: 0%"></span>
+          <span id="progress-bar-fill" class="progress-value" style="width: 0%"></span>
         </div>
       </section>
       <button id="refresh-button" class="button button-secondary dashboard-refresh-control" type="button" data-i18n="refresh">Refresh data</button>

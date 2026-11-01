@@ -290,28 +290,28 @@
     if (payload.model) activeDownloadModel = payload.model;
     panel.hidden = false;
     panel.dataset.active = payload.state !== "complete" && payload.state !== "error" ? "true" : "false";
-    $("model-progress-model").textContent = activeDownloadModel || t("modelDownload", "Model download");
-    $("model-progress-percent").textContent = `${Math.round(percent)}%`;
+    $("download-model").textContent = activeDownloadModel || t("modelDownload", "Model download");
+    $("download-percent").textContent = `${Math.round(percent)}%`;
     const message = payload.message || "";
     const speedMbps = Number(payload.speedMbps);
     const speed = Number.isFinite(speedMbps) ? `${speedMbps.toFixed(2)} MB/s` : message.match(/(\d+(?:\.\d+)?\s*(?:KB|MB|GB)\/s)/i)?.[1];
     const size = message.match(/(\d+(?:\.\d+)?\s*(?:KB|MB|GB)\s*\/\s*\d+(?:\.\d+)?\s*(?:KB|MB|GB))/i);
     const etaSeconds = Number(payload.etaSeconds);
     const eta = Number.isFinite(etaSeconds) && etaSeconds > 0 ? ` · ETA ${Math.ceil(etaSeconds)}s` : "";
-    $("model-progress-speed").textContent = speed ? `${speed}${eta}` : (payload.state === "complete" ? t("downloadComplete", "Download complete") : t("transferring", "Transferring over SSH"));
+    $("download-speed").textContent = speed ? `${speed}${eta}` : (payload.state === "complete" ? t("downloadComplete", "Download complete") : t("transferring", "Transferring over SSH"));
     const total = Number(payload.total || payload.sizeBytes);
     const completed = Number(payload.completed);
-    $("model-progress-size").textContent = Number.isFinite(total) && total > 0 ? `${formatBytes(Number.isFinite(completed) ? completed : 0)} / ${formatBytes(total)}` : (size ? size[1] : (message || t("calculating", "Calculating transfer size...")));
+    $("download-sizes").textContent = Number.isFinite(total) && total > 0 ? `${formatBytes(Number.isFinite(completed) ? completed : 0)} / ${formatBytes(total)}` : (size ? size[1] : (message || t("calculating", "Calculating transfer size...")));
     window.cancelAnimationFrame(downloadProgressFrame);
     downloadProgressFrame = window.requestAnimationFrame(() => {
-      $("model-progress-value").style.width = percent + "%";
+      $("progress-bar-fill").style.width = percent + "%";
       panel.querySelector(".progress-track").setAttribute("aria-valuenow", String(percent));
     });
     if (payload.state === "complete") {
-      $("model-progress-speed").textContent = t("downloadComplete", "Download complete");
-      $("model-progress-size").textContent = t("modelInstalledRemote", "Model installed on remote host");
+      $("download-speed").textContent = t("downloadComplete", "Download complete");
+      $("download-sizes").textContent = t("modelInstalledRemote", "Model installed on remote host");
     }
-    if (payload.state === "error") $("model-progress-speed").textContent = t("downloadFailed", "Download failed");
+    if (payload.state === "error") $("download-speed").textContent = t("downloadFailed", "Download failed");
   };
   const refresh = async () => {
     if (refreshInFlight) return; refreshInFlight = true; elements.refresh.disabled = true;

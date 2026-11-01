@@ -81,12 +81,12 @@ h1 { font-size: clamp(26px, 4vw, 32px); letter-spacing: -.035em; line-height: 1.
 .launcher-select { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 7px; color: var(--text); height: 38px; min-width: 220px; padding: 0 10px; }
 .status-badge--neutral { background: #f1f5f9; color: var(--muted); }
 .deployment-log { display: none !important; }
-.model-progress { background: #111827; border: 1px solid #263449; border-radius: 12px; box-shadow: 0 16px 36px rgba(2, 6, 23, .24); color: #f8fafc; margin: 0 0 24px; overflow: hidden; padding: 18px 20px 16px; }
+.model-progress { background: #161b22; border: 1px solid #30363d; border-radius: 10px; box-shadow: 0 16px 36px rgba(2, 6, 23, .24); color: #f8fafc; margin: 0 0 24px; overflow: hidden; padding: 18px 20px 16px; }
 .model-progress-heading { align-items: center; display: flex; font-size: 14px; justify-content: space-between; line-height: 1.3; }
 .model-progress-heading strong:last-child { color: #a5b4fc; font-variant-numeric: tabular-nums; }
 .model-progress-details { align-items: center; color: #94a3b8; display: flex; font-size: 12px; gap: 18px; margin-top: 8px; }
 .model-progress-details span:first-child { color: #c4b5fd; }
-.model-progress-track { background: #263449; border-radius: 999px; height: 4px; margin-top: 18px; }
+.model-progress-track { background: #30363d; border-radius: 999px; height: 4px; margin-top: 18px; }
 .model-progress-value { background: linear-gradient(90deg, #38bdf8, #818cf8); border-radius: inherit; box-shadow: 0 0 14px rgba(129, 140, 248, .65); display: block; height: 100%; transition: width .35s ease-out; }
 .chat-panel { background: #111827; border: 1px solid #334155; border-radius: 10px; color: #e5e7eb; margin-top: 18px; padding: 18px; }
 .chat-header { align-items: center; display: flex; justify-content: space-between; gap: 16px; }
