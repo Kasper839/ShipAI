@@ -2,8 +2,10 @@
 
 const path = require("node:path");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const { app, BrowserWindow, Notification, ipcMain } = require("electron");
 const { Client } = require("ssh2");
+const { PostHog } = require("posthog-node");
 const { SshManager } = require("./sshManager");
 const profileStore = require("./profileStore");
 const dockerInitScript = fs.readFileSync(path.join(__dirname, "docker-init.sh"), "utf8");
@@ -14,6 +16,8 @@ let sshConnection = null;
 const sshManager = new SshManager(() => sshClient);
 let remoteStatusCache = { expiresAt: 0, value: null, pending: null };
 let dockerRepairPending = null;
+let telemetryClient = null;
+let telemetryDistinctId = null;
 let environmentStatus = {
   initialized: false,
   ok: false,
@@ -23,6 +27,56 @@ let environmentStatus = {
 
 const sendToRenderer = (channel, payload) => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+};
+
+const initializeTelemetry = () => {
+  const apiKey = process.env.POSTHOG_API_KEY;
+  if (!apiKey) return;
+  const machineIdPath = path.join(app.getPath("userData"), "anonymous-id");
+  let machineId;
+  try {
+    machineId = fs.existsSync(machineIdPath)
+      ? fs.readFileSync(machineIdPath, "utf8").trim()
+      : "";
+    if (!/^[a-f0-9-]{36}$/i.test(machineId)) {
+      machineId = crypto.randomUUID();
+      fs.writeFileSync(machineIdPath, machineId, { encoding: "utf8", mode: 0o600 });
+    }
+    telemetryDistinctId = machineId;
+    telemetryClient = new PostHog(apiKey, {
+      host: process.env.POSTHOG_HOST || "https://us.i.posthog.com",
+      flushAt: 5,
+      flushInterval: 10000
+    });
+    telemetryClient.capture({ distinctId: telemetryDistinctId, event: "app_launched" });
+  } catch (error) {
+    telemetryClient = null;
+    telemetryDistinctId = null;
+    console.warn("[Telemetry] Disabled:", error.message);
+  }
+};
+
+const trackTelemetry = (event, properties = {}) => {
+  if (!telemetryClient || !telemetryDistinctId) return;
+  telemetryClient.capture({ distinctId: telemetryDistinctId, event, properties });
+};
+
+const getGithubStats = async () => {
+  try {
+    const response = await fetch("https://api.github.com/repos/Kasper839/ShipAI", {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "ShipAI" },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      stars: Number.isInteger(data.stargazers_count) ? data.stargazers_count : 0,
+      forks: Number.isInteger(data.forks_count) ? data.forks_count : 0,
+      openIssues: Number.isInteger(data.open_issues_count) ? data.open_issues_count : 0
+    };
+  } catch {
+    return null;
+  }
 };
 
 const notifyModelDownload = (success, message) => {
@@ -607,7 +661,8 @@ const buildDeployment = (configuration) => {
     return {
       command: `sudo -S -p '' -v && if command -v ollama >/dev/null 2>&1; then echo 'Ollama is already installed.'; else echo 'Installing Ollama...'; curl -fsSL https://ollama.com/install.sh | sudo -n sh || exit $?; fi; sudo -n systemctl enable --now ollama 2>/dev/null || true; ollama pull ${shellQuote(configuration.model)} && (nohup ollama run ${shellQuote(configuration.model)} >/tmp/shipai-ollama.log 2>&1 &)`,
       requiresSudo: true,
-      progressType: "ollama-pull"
+      progressType: "ollama-pull",
+      model: configuration.model
     };
   }
   if (configuration.type !== "container" || !deploymentImage(configuration.image) || !aiInfrastructureImage(configuration.image)) {
@@ -659,6 +714,7 @@ const startDeployment = async (sender, command, jobId, sudoPassword = "") => {
     const success = result.code === 0;
     const message = success ? "Model is ready." : result.stderr || "Model download failed.";
     sendProgress({ state: success ? "complete" : "error", percent: success ? 100 : Math.max(0, lastPercent), message });
+    if (success) trackTelemetry("model_loaded", { model: command.model });
     notifyModelDownload(success, message);
   }
   if (result.code !== 0) throw new Error(result.stderr || "Remote deployment failed.");
@@ -713,6 +769,7 @@ ipcMain.handle("profiles:credentials", (_event, id) => {
 });
 ipcMain.handle("profiles:save", (_event, profile) => profileStore.saveProfile(profile));
 ipcMain.handle("profiles:delete", (_event, id) => profileStore.deleteProfile(id));
+ipcMain.handle("get-github-stats", () => getGithubStats());
 
 ipcMain.handle("ssh:telemetry", async () => getTelemetry());
 ipcMain.handle("ssh:get-telemetry", async () => {
@@ -859,6 +916,7 @@ ipcMain.handle("ollama:pull-model", async (event, model) => {
   if (result.code !== 0) throw new Error(result.stderr || "Ollama model pull failed.");
   sendProgress({ model, status: "success", completed: 1, total: 1, percent: 100, speedMbps: 0, etaSeconds: 0, sizeBytes: 1 });
   remoteStatusCache.expiresAt = 0;
+  trackTelemetry("model_loaded", { model });
   return { model, completed: true };
 });
 
@@ -901,6 +959,7 @@ ipcMain.handle("ssh:disconnect", () => {
 });
 
 app.whenReady().then(() => {
+  initializeTelemetry();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -912,4 +971,7 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", closeSshConnection);
+app.on("before-quit", () => {
+  if (telemetryClient) void telemetryClient.shutdown();
+  closeSshConnection();
+});

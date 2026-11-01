@@ -10,6 +10,7 @@
     "package": "electron-builder"
   },
   "dependencies": {
+    "posthog-node": "^5.61.1",
     "ssh2": "^1.16.0"
   },
   "devDependencies": {
