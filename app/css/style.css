@@ -223,8 +223,12 @@ h1 { font-size: clamp(26px, 4vw, 32px); letter-spacing: -.035em; line-height: 1.
 .metric-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, 1fr); margin-bottom: 24px; }
 .metric-card, .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
 .vram-panel { margin-top: 1rem; }
-.vram-summary { display: flex; flex-wrap: wrap; gap: 1.5rem; padding: 1rem 0; color: var(--muted); }
-.vram-summary strong { color: var(--text); margin-left: .35rem; }
+.vram-summary { display: grid; gap: 1px; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 24px 18px; }
+.vram-stat { background: #f8fafc; display: flex; flex-direction: column; gap: 8px; min-height: 76px; padding: 16px; }
+.vram-stat:first-child { border-radius: 8px 0 0 8px; }
+.vram-stat:last-child { border-radius: 0 8px 8px 0; }
+.vram-stat span { color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.vram-stat strong { color: var(--text); font-size: 17px; font-variant-numeric: tabular-nums; }
 .metric-card { min-height: 154px; padding: 22px; }
 .metric-label { color: var(--muted); font-size: 13px; font-weight: 600; }
 .metric-value { align-items: baseline; display: flex; gap: 7px; margin-top: 13px; }
@@ -251,4 +255,5 @@ h1 { font-size: clamp(26px, 4vw, 32px); letter-spacing: -.035em; line-height: 1.
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 900px) { .dashboard-topbar .dashboard-tabs { margin-left: 16px; } .dashboard-tab { font-size: 12px; padding: 0 8px; } }
 @media (max-width: 720px) { .topbar-caption { display: none; } .auth-card { padding: 28px 22px; } .dashboard-heading { align-items: flex-start; flex-direction: column; gap: 18px; } .metric-grid { grid-template-columns: 1fr; } .dashboard-actions { gap: 8px; } .dashboard-topbar .dashboard-tabs { margin-left: 12px; } .dashboard-topbar .dashboard-tab { min-height: 56px; } }
+@media (max-width: 640px) { .vram-summary { grid-template-columns: 1fr; } .vram-stat:first-child, .vram-stat:last-child { border-radius: 0; } .vram-stat:first-child { border-radius: 8px 8px 0 0; } .vram-stat:last-child { border-radius: 0 0 8px 8px; } }
 @media (max-width: 480px) { .form-grid { grid-template-columns: 1fr; gap: 18px; } }

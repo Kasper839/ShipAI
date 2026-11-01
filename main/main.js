@@ -557,7 +557,8 @@ const parseOllamaPs = (output) => {
   } catch {
     return [];
   }
-  return Array.isArray(data.models) ? data.models.filter((model) => model && typeof model === "object") : [];
+  const models = Array.isArray(data.models) ? data.models : [];
+  return models.filter((model) => model && typeof model === "object");
 };
 let ollamaVramCache = { expiresAt: 0, value: null, pending: null };
 const getOllamaVramStatus = async (contextTokens = 4096) => {
@@ -575,7 +576,11 @@ const getOllamaVramStatus = async (contextTokens = 4096) => {
       .filter((row) => row.length >= 3 && row.every(Number.isFinite));
     const totalVramBytes = gpuRows.reduce((sum, row) => sum + row[0], 0);
     const usedGpuBytes = gpuRows.reduce((sum, row) => sum + row[1], 0);
-    const activeVramBytes = models.reduce((sum, model) => sum + Number(model.size_vram || 0), 0);
+    const activeVramBytes = models.reduce((sum, model) => {
+      const sizeVram = Number(model.size_vram);
+      const size = Number(model.size);
+      return sum + (Number.isFinite(sizeVram) && sizeVram > 0 ? sizeVram : (Number.isFinite(size) && size > 0 ? size : 0));
+    }, 0);
     const value = {
       activeVramBytes, usedVramBytes: usedGpuBytes, totalVramBytes,
       freeVramBytes: Math.max(0, totalVramBytes - usedGpuBytes),
