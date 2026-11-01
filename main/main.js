@@ -546,6 +546,28 @@ const deploymentImage = (value) => typeof value === "string" && /^[a-zA-Z0-9][a-
 const deploymentModel = (value) => typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9_.\/:@-]{0,127}$/.test(value);
 const aiInfrastructureImage = (value) => typeof value === "string" && /^(ollama\/|qdrant\/|chromadb\/|milvusdb\/|vllm\/|ghcr\.io\/.*(ollama|llm|vector)|nvidia\/).*$/i.test(value);
 const shellQuote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
+const ollamaApiCommand = (method = "GET", body = "", path = "ps") => {
+  const bodyArgument = body ? ` -H 'Content-Type: application/json' --data ${shellQuote(body)}` : "";
+  return `curl -fsS --max-time 1800 -X ${method} http://127.0.0.1:11434/api/${path}${bodyArgument}`;
+};
+const parseOllamaPs = (output) => {
+  const data = JSON.parse(output || "{\"models\":[]}");
+  return Array.isArray(data.models) ? data.models.filter((model) => model && typeof model === "object") : [];
+};
+const getOllamaVramStatus = async () => {
+  if (!sshClient) throw new Error("No SSH connection is active.");
+  const [modelsOutput, gpuOutput] = await Promise.all([
+    executeRemote(ollamaApiCommand(), { timeoutMs: 15000 }),
+    executeRemote("if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=memory.total,memory.used,memory.free --format=csv,noheader,nounits; else exit 127; fi", { timeoutMs: 10000 })
+  ]);
+  const models = parseOllamaPs(modelsOutput);
+  const gpuRows = gpuOutput.split(/\r?\n/).map((line) => line.split(",").map((value) => Number.parseFloat(value.trim()) * 1024 ** 2))
+    .filter((row) => row.length >= 3 && row.every(Number.isFinite));
+  const totalVramBytes = gpuRows.reduce((sum, row) => sum + row[0], 0);
+  const usedGpuBytes = gpuRows.reduce((sum, row) => sum + row[1], 0);
+  const activeVramBytes = models.reduce((sum, model) => sum + Number(model.size_vram || 0), 0);
+  return { activeVramGb: activeVramBytes / 1024 ** 3, usedVramGb: usedGpuBytes / 1024 ** 3, totalVramGb: totalVramBytes / 1024 ** 3, freeVramGb: Math.max(0, totalVramBytes - usedGpuBytes) / 1024 ** 3, models, queriedAt: new Date().toISOString() };
+};
 
 const buildDeployment = (configuration) => {
   if (!configuration || typeof configuration !== "object") throw new Error("A deployment configuration is required.");
@@ -748,6 +770,55 @@ ipcMain.handle("ssh:run-model", async (_event, model) => {
   const result = await executeRemoteResult(command, { timeoutMs: 15000 });
   if (result.code !== 0) throw new Error(result.stderr || "Unable to start the Ollama model.");
   return { model, started: true };
+});
+
+ipcMain.handle("ollama:get-vram-status", async () => getOllamaVramStatus());
+
+ipcMain.handle("ollama:flush-vram", async () => {
+  if (!sshClient) throw new Error("No SSH connection is active.");
+  const models = parseOllamaPs(await executeRemote(ollamaApiCommand(), { timeoutMs: 15000 }));
+  await Promise.all(models.map((model) => {
+    const name = model.name || model.model;
+    if (!deploymentModel(name)) return Promise.resolve();
+    return executeRemote(ollamaApiCommand("POST", JSON.stringify({ model: name, prompt: "", keep_alive: 0 }), "generate"), { timeoutMs: 15000 });
+  }));
+  remoteStatusCache.expiresAt = 0;
+  return { unloaded: models.length, unloadedAt: new Date().toISOString() };
+});
+
+ipcMain.handle("ollama:pull-model", async (event, model) => {
+  if (!sshClient || !deploymentModel(model)) throw new Error("A valid Ollama model is required.");
+  let buffer = "";
+  let startedAt = Date.now();
+  const result = await executeRemoteResult(ollamaApiCommand("POST", JSON.stringify({ model, stream: true }), "pull"), {
+    timeoutMs: 1800000,
+    onStdout: (chunk) => {
+      buffer += chunk;
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || "";
+      lines.filter(Boolean).forEach((line) => {
+        try {
+          const progress = JSON.parse(line);
+          const total = Number(progress.total) || 0;
+          const completed = Number(progress.completed) || 0;
+          const elapsed = Math.max(0.001, (Date.now() - startedAt) / 1000);
+          const speed = completed / elapsed;
+          event.sender.send("ollama:pull-progress", {
+            model, status: progress.status || "downloading", completed, total,
+            percent: total ? Math.min(100, completed / total * 100) : 0,
+            speedMbps: speed / 1024 ** 2,
+            etaSeconds: speed > 0 && total > completed ? (total - completed) / speed : 0,
+            sizeBytes: total
+          });
+        } catch (error) {
+          console.warn("[Ollama] Invalid pull progress:", error.message);
+        }
+      });
+    }
+  });
+  if (result.code !== 0) throw new Error(result.stderr || "Ollama model pull failed.");
+  remoteStatusCache.expiresAt = 0;
+  return { model, completed: true };
 });
 
 ipcMain.handle("ssh:power-action", async (_event, action) => {

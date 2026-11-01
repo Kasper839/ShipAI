@@ -13,7 +13,8 @@
     containerCount: $("container-count"), tableBody: $("containers-table-body"),
     chartCpuValue: $("chart-cpu-value"), chartRamValue: $("chart-ram-value"),
     chartNetworkValue: $("chart-network-value"), chartDiskValue: $("chart-disk-value"),
-    storageList: $("storage-list")
+    storageList: $("storage-list"), vramActive: $("vram-active"), vramFreeable: $("vram-freeable"),
+    vramContext: $("vram-context"), vramProgress: $("vram-progress"), flushVram: $("flush-vram")
   };
   const refreshInstalledModels = async () => {
     try {
@@ -38,6 +39,7 @@
   let chatResponse = null;
   const taskTabs = new Map();
   let activeDownloadModel = "";
+  let downloadProgressFrame = 0;
 
   const showError = (error) => { elements.error.textContent = error.message || "Unable to retrieve server telemetry."; elements.error.hidden = false; };
   const showToast = (message) => { const toast = $("dashboard-toast"); toast.textContent = message; toast.hidden = false; window.setTimeout(() => { toast.hidden = true; }, 2600); };
@@ -183,6 +185,21 @@
     });
   };
   const formatBytes = (bytes) => { if (!Number.isFinite(bytes)) return "N/A"; if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`; return `${(bytes / 1024 ** 3).toFixed(1)} GB`; };
+  const refreshVram = async () => {
+    try {
+      const status = await window.api.getOllamaVramStatus(4096);
+      elements.vramActive.textContent = `${formatBytes(status.activeVramBytes)} / ${formatBytes(status.totalVramBytes)}`;
+      elements.vramFreeable.textContent = formatBytes(status.freeableVramBytes);
+      elements.vramContext.textContent = formatBytes(status.estimatedContextOverheadBytes);
+      elements.vramProgress.style.width = `${status.totalVramBytes ? Math.min(100, status.activeVramBytes / status.totalVramBytes * 100) : 0}%`;
+    } catch (error) {
+      elements.vramActive.textContent = "N/A";
+      elements.vramFreeable.textContent = "N/A";
+      elements.vramContext.textContent = "N/A";
+      elements.vramProgress.style.width = "0%";
+      console.warn("Unable to retrieve Ollama VRAM status:", error.message);
+    }
+  };
 
   const modelInstalled = (model) => installedModels.find((installed) => installed.name.toLowerCase() === model.ollama.toLowerCase() || installed.name.toLowerCase().startsWith(`${model.ollama.toLowerCase()}:`));
   const specGb = (value) => Number.parseFloat(String(value).replace(",", "."));
@@ -268,19 +285,28 @@
   const appendDeploymentLog = (entry) => { const log = $("deployment-log"); log.hidden = false; log.textContent += `${entry.data}\n`; log.scrollTop = log.scrollHeight; };
   const updateModelProgress = (payload) => {
     const panel = $("model-progress");
-    const percent = Number.isFinite(payload.percent) ? Math.max(0, Math.min(100, payload.percent)) : 0;
+    const percentValue = Number(payload.percent);
+    const percent = Number.isFinite(percentValue) ? Math.max(0, Math.min(100, percentValue)) : 0;
     if (payload.model) activeDownloadModel = payload.model;
     panel.hidden = false;
     panel.dataset.active = payload.state !== "complete" && payload.state !== "error" ? "true" : "false";
     $("model-progress-model").textContent = activeDownloadModel || t("modelDownload", "Model download");
-    $("model-progress-percent").textContent = `${percent}%`;
+    $("model-progress-percent").textContent = `${Math.round(percent)}%`;
     const message = payload.message || "";
-    const speed = message.match(/(\d+(?:\.\d+)?\s*(?:KB|MB|GB)\/s)/i);
+    const speedMbps = Number(payload.speedMbps);
+    const speed = Number.isFinite(speedMbps) ? `${speedMbps.toFixed(2)} MB/s` : message.match(/(\d+(?:\.\d+)?\s*(?:KB|MB|GB)\/s)/i)?.[1];
     const size = message.match(/(\d+(?:\.\d+)?\s*(?:KB|MB|GB)\s*\/\s*\d+(?:\.\d+)?\s*(?:KB|MB|GB))/i);
-    $("model-progress-speed").textContent = speed ? speed[1] : (payload.state === "complete" ? t("downloadComplete", "Download complete") : t("transferring", "Transferring over SSH"));
-    $("model-progress-size").textContent = size ? size[1] : (message || t("calculating", "Calculating transfer size..."));
-    $("model-progress-value").style.width = `${percent}%`;
-    panel.querySelector(".progress-track").setAttribute("aria-valuenow", String(percent));
+    const etaSeconds = Number(payload.etaSeconds);
+    const eta = Number.isFinite(etaSeconds) && etaSeconds > 0 ? ` · ETA ${Math.ceil(etaSeconds)}s` : "";
+    $("model-progress-speed").textContent = speed ? `${speed}${eta}` : (payload.state === "complete" ? t("downloadComplete", "Download complete") : t("transferring", "Transferring over SSH"));
+    const total = Number(payload.total || payload.sizeBytes);
+    const completed = Number(payload.completed);
+    $("model-progress-size").textContent = Number.isFinite(total) && total > 0 ? `${formatBytes(Number.isFinite(completed) ? completed : 0)} / ${formatBytes(total)}` : (size ? size[1] : (message || t("calculating", "Calculating transfer size...")));
+    window.cancelAnimationFrame(downloadProgressFrame);
+    downloadProgressFrame = window.requestAnimationFrame(() => {
+      $("model-progress-value").style.width = percent + "%";
+      panel.querySelector(".progress-track").setAttribute("aria-valuenow", String(percent));
+    });
     if (payload.state === "complete") {
       $("model-progress-speed").textContent = t("downloadComplete", "Download complete");
       $("model-progress-size").textContent = t("modelInstalledRemote", "Model installed on remote host");
@@ -291,6 +317,7 @@
     if (refreshInFlight) return; refreshInFlight = true; elements.refresh.disabled = true;
     try {
       const telemetry = await window.api.getTelemetry(); elements.error.hidden = true; elements.temperature.textContent = telemetry.cpuTemperatureC === null ? "N/A" : telemetry.cpuTemperatureC.toFixed(1);
+      await refreshVram();
       if (telemetry.cpuUsagePercent !== null) { addHistoryPoint("cpu", telemetry.cpuUsagePercent); elements.chartCpuValue.textContent = `${telemetry.cpuUsagePercent}%`; }
       if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); elements.chartNetworkValue.textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
       if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); elements.chartRamValue.textContent = `${telemetry.memory.usagePercent}%`; }
@@ -362,6 +389,7 @@
     setDashboardTab(tab.dataset.dashboardTab);
   });
   $("model-search").addEventListener("input", renderCatalogue); $("model-category").addEventListener("change", renderCatalogue); $("custom-model-form").addEventListener("submit", downloadCustomModel); elements.refresh.addEventListener("click", refresh);
+  elements.flushVram.addEventListener("click", async () => { elements.flushVram.disabled = true; try { await window.api.flushOllamaVram(); await refreshVram(); showToast("VRAM flushed."); } catch (error) { showError(error); } finally { elements.flushVram.disabled = false; } });
   const requestPowerAction = (action, label) => {
     if (!window.confirm(`Are you sure you want to ${label} the remote server?`)) return;
     window.api.powerAction(action).then(() => showToast(`${label[0].toUpperCase()}${label.slice(1)} requested.`)).catch(showError);
@@ -370,6 +398,6 @@
   $("shutdown-server").addEventListener("click", () => requestPowerAction("shutdown", "shutdown"));
   $("start-chat")?.addEventListener("click", () => { $("chat-panel").hidden = false; $("chat-prompt").focus(); });
   window.addEventListener("shipai:language-changed", () => { populateChatModels(); if (catalogue.length) renderCatalogue(); });
-  window.api.onDeploymentLog((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { appendDeploymentLog(entry); updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); document.querySelector(".dashboard-layout").hidden = true; $("connection-lost-view").hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
+  window.api.onOllamaPullProgress((payload) => { updateModelProgress({ ...payload, state: payload.status === "success" ? "complete" : "downloading" }); }); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (task) openTaskChat(task); void refreshInstalledModels(); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); document.querySelector(".dashboard-layout").hidden = true; $("connection-lost-view").hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 1000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();

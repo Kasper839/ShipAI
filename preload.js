@@ -12,6 +12,14 @@ contextBridge.exposeInMainWorld("api", Object.freeze({
   getTelemetrySafe: () => ipcRenderer.invoke("ssh:get-telemetry"),
   checkHardware: () => ipcRenderer.invoke("ssh:check-hardware"),
   getInstalledModels: () => ipcRenderer.invoke("ssh:installed-models"),
+  getOllamaVramStatus: (contextTokens) => ipcRenderer.invoke("ollama:get-vram-status", { contextTokens }),
+  flushOllamaVram: () => ipcRenderer.invoke("ollama:flush-vram"),
+  pullOllamaModel: (model) => ipcRenderer.invoke("ollama:pull-model", model),
+  onOllamaPullProgress: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on("ollama:pull-progress", handler);
+    return () => ipcRenderer.removeListener("ollama:pull-progress", handler);
+  },
   ensureDocker: () => ipcRenderer.invoke("ssh:ensure-docker"),
   initializeEnvironment: () => ipcRenderer.invoke("ssh:initialize-environment"),
   deployService: (configuration) => ipcRenderer.invoke("ssh:deploy-service", configuration),

@@ -33,13 +33,13 @@
       <section id="model-progress" class="model-progress model-progress--top" hidden data-i18n-aria-label="modelProgress" aria-label="Model download progress">
         <div class="model-progress-heading">
           <strong id="model-progress-model" data-i18n="preparingDownload">Preparing model download</strong>
-          <strong id="model-progress-percent">0%</strong>
+          <strong id="model-progress-percent" aria-live="polite">0%</strong>
         </div>
         <div class="model-progress-details">
           <span id="model-progress-speed" data-i18n="waitingTransfer">Waiting for transfer</span>
           <span id="model-progress-size">0 B / —</span>
         </div>
-        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progress-track model-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <span id="model-progress-value" class="progress-value" style="width: 0%"></span>
         </div>
       </section>
@@ -99,6 +99,11 @@
             <div class="metric-value"><span id="ram-usage">N/A</span><span class="metric-unit">GB / <span id="ram-total">N/A</span> GB</span></div>
             <div class="progress-track" aria-label="RAM usage"><span id="ram-progress" class="progress-value" style="width: 0%"></span></div>
           </article>
+        </section>
+        <section class="panel vram-panel" aria-labelledby="vram-title">
+          <div class="panel-header panel-header--status"><strong id="vram-title">Ollama VRAM</strong><button id="flush-vram" class="button button-secondary" type="button">Flush VRAM</button></div>
+          <div class="vram-summary"><span>Active VRAM <strong id="vram-active">N/A</strong></span><span>Freeable VRAM <strong id="vram-freeable">N/A</strong></span><span>Context overhead <strong id="vram-context">N/A</strong></span></div>
+          <div class="progress-track" aria-label="Active VRAM usage"><span id="vram-progress" class="progress-value" style="width: 0%"></span></div>
         </section>
       </div>
       <div class="dashboard-view" data-dashboard-view="docker" hidden>
