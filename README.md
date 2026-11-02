@@ -1,4 +1,4 @@
-# ShipAI.
+# ShipAI
 
 [![GitHub Downloads](https://img.shields.io/github/downloads/Kasper839/ShipAI/total?style=for-the-badge&color=blue)](https://github.com/Kasper839/ShipAI/releases)
 
