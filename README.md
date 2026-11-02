@@ -26,7 +26,7 @@ Running a private AI server often means switching between SSH terminals, Docker 
 - Hardware-aware warnings when a model exceeds the detected GPU memory
 - Clear connection-lost and reconnect states for interrupted SSH sessions
 - More resilient telemetry polling, IPC error handling, and model installation feedback
-- Docker management remains available in the backend while the dashboard experience is being prepared for a future release
+- Docker management remains available in the backend while the dashboard experience is being prepared for a future release.
 
 ### ✨ v1.1.0 highlights
 
