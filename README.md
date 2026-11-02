@@ -213,7 +213,7 @@ The packaged artifacts are written to `dist/`. The build configuration targets a
 
 ### Saved profile storage
 
-ShipAI stores profiles in `profiles.json` under Electron’s per-user application data directory. The persisted structure is:
+ShipAI stores profiles in `profiles.json` under Electron’s per-user application data directory. The persisted structure is:.
 
 ```json
 {
