@@ -18,8 +18,8 @@
     cancelDownload: $("cancel-download")
   };
   const refreshInstalledModels = async () => {
-    try {
-      const models = await window.api.getInstalledModels();
+    if (modelRequest) return modelRequest;
+    modelRequest = window.api.getInstalledModels().then((models) => {
       const nextModels = Array.isArray(models) ? models : [];
       const previous = installedModels.map((model) => model.name).sort().join("|");
       const next = nextModels.map((model) => model.name).sort().join("|");
@@ -27,9 +27,12 @@
       installedModelsLoaded = true;
       populateChatModels();
       if (previous !== next) renderCatalogue();
-    } catch (error) {
+      return nextModels;
+    }).catch((error) => {
       console.warn("Unable to refresh installed Ollama models:", error.message);
-    }
+      return [];
+    }).finally(() => { modelRequest = null; });
+    return modelRequest;
   };
   const history = { cpu: [], ram: [], network: [], disk: [] };
   let refreshInFlight = false;
@@ -40,6 +43,11 @@
   let catalogue = [];
   let installedModels = [];
   let installedModelsLoaded = false;
+  let cachedTelemetry = null;
+  let cachedVram = null;
+  let telemetryRequest = null;
+  let vramRequest = null;
+  let modelRequest = null;
   let chatModel = null;
   let chatResponse = null;
   const taskTabs = new Map();
@@ -50,6 +58,24 @@
 
   const showError = (error) => { elements.error.textContent = error.message || "Unable to retrieve server telemetry."; elements.error.hidden = false; };
   const showToast = (message) => { const toast = $("dashboard-toast"); toast.textContent = message; toast.hidden = false; window.setTimeout(() => { toast.hidden = true; }, 2600); };
+  const copyValue = async (value, label = "Value") => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      showToast(`${label} copied`);
+    } catch (error) {
+      console.warn("Unable to copy value:", error.message);
+    }
+  };
+  const makeCopyable = (element, value, label) => {
+    if (!element || !value) return;
+    element.textContent = value;
+    element.dataset.copyValue = value;
+    element.dataset.copyLabel = label;
+    element.title = `Copy ${label}`;
+    element.tabIndex = 0;
+    element.setAttribute("role", "button");
+  };
   const populateChatModels = () => {
     const select = $("chat-model-select");
     if (!select) return;
@@ -112,9 +138,7 @@
     }
     const lower = min ?? Math.min(...values); const upper = max ?? Math.max(...values); const range = upper - lower || 1;
     const points = values.map((value, index) => `${values.length === 1 ? 160 : (index / (values.length - 1)) * 320},${96 - ((value - lower) / range) * 78}`).join(" ");
-    const gradientId = `${id}-gradient`;
-    const areaPoints = `0,96 ${points} 320,96`;
-    chart.innerHTML = `<defs><linearGradient id="${gradientId}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".32"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><path d="M 0 96 H 320 M 0 57 H 320 M 0 18 H 320" stroke="#334155" stroke-width="1" fill="none"/><polygon points="${areaPoints}" fill="url(#${gradientId})"/><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+    chart.innerHTML = `<path d="M 0 96 H 320 M 0 57 H 320 M 0 18 H 320" stroke="#30363d" stroke-width="1" fill="none"/><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
   };
 
   const runDockerAction = async (action, container, button) => {
@@ -130,7 +154,7 @@
       const running = container.state === "running" || /^up\b/i.test(container.status);
       const row = document.createElement("tr");
       row.innerHTML = `<th scope="row"><span class="service-name"></span><span class="service-id"></span></th><td class="container-image"></td><td><span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span data-container-state></span></span></td><td class="last-action"></td><td><span data-container-actions></span></td>`;
-      row.querySelector(".service-name").textContent = container.name; row.querySelector(".service-id").textContent = t("container", "Container"); row.querySelector(".container-image").textContent = container.ports || t("noPorts", "No published ports");
+      row.querySelector(".service-name").textContent = container.name; makeCopyable(row.querySelector(".service-id"), container.id, "Container ID"); makeCopyable(row.querySelector(".container-image"), container.ports || t("noPorts", "No published ports"), "Port");
       row.querySelector("[data-container-state]").textContent = running ? t("running", "Running") : t("stopped", "Stopped"); row.querySelector(".last-action").textContent = t("synced", "Synced");
       const actions = row.querySelector("[data-container-actions]");
       [["start", t("start", "Start")], ["stop", t("stop", "Stop")], ["logs", t("logs", "Logs")]].filter(([action]) => action === "logs" || action === (running ? "stop" : "start")).forEach(([action, label]) => {
@@ -206,30 +230,45 @@
     meter.style.width = `${safePercent}%`;
     detail.textContent = meta;
   };
+  const renderVram = (status) => {
+    if (!status) return;
+    const active = Number(status.activeVramBytes);
+    const total = Number(status.totalVramBytes);
+    const activeBytes = Number.isFinite(active) ? active : 0;
+    const totalBytes = Number.isFinite(total) ? total : 0;
+    const overCapacity = totalBytes > 0 && activeBytes > totalBytes;
+    elements.vramActive.textContent = `${formatBytes(activeBytes)} / ${formatBytes(totalBytes)}`;
+    elements.vramFreeable.textContent = formatBytes(Number.isFinite(Number(status.freeableVramBytes)) ? Number(status.freeableVramBytes) : 0);
+    elements.vramContext.textContent = formatBytes(Number.isFinite(Number(status.estimatedContextOverheadBytes)) ? Number(status.estimatedContextOverheadBytes) : 0);
+    elements.vramProgress.style.width = `${totalBytes > 0 ? Math.min(100, activeBytes / totalBytes * 100) : 0}%`;
+    const panel = document.querySelector(".vram-panel");
+    const card = document.querySelector(".capacity-card--vram");
+    [panel, card].forEach((element) => element?.classList.toggle("is-over-capacity", overCapacity));
+    updateCapacityCard("vram", totalBytes > 0 ? activeBytes / totalBytes * 100 : 0, `${formatBytes(activeBytes)} active · ${formatBytes(totalBytes)} total`);
+    const warning = $("environment-warning");
+    if (warning && overCapacity) {
+      warning.hidden = false;
+      warning.textContent = "Active model memory exceeds available VRAM. Inference may fall back to system RAM or run slowly.";
+    } else if (warning && warning.textContent.startsWith("Active model memory exceeds")) {
+      warning.hidden = true;
+    }
+  };
   const refreshVram = async () => {
-    try {
-      const status = await window.api.getOllamaVramStatus(4096);
-      const active = Number(status.activeVramBytes);
-      const total = Number(status.totalModelBytes);
-      elements.vramActive.textContent = `${formatBytes(Number.isFinite(active) ? active : 0)} / ${formatBytes(Number.isFinite(total) ? total : 0)}`;
-      elements.vramFreeable.textContent = formatBytes(Number.isFinite(Number(status.freeableVramBytes)) ? Number(status.freeableVramBytes) : 0);
-      elements.vramContext.textContent = formatBytes(Number.isFinite(Number(status.estimatedContextOverheadBytes)) ? Number(status.estimatedContextOverheadBytes) : 0);
-      elements.vramProgress.style.width = `${total > 0 ? Math.min(100, active / total * 100) : 0}%`;
-      updateCapacityCard("vram", total > 0 ? active / total * 100 : 0, `${formatBytes(Number.isFinite(active) ? active : 0)} active · ${formatBytes(Number.isFinite(total) ? total : 0)} total`);
-      const warning = $("environment-warning");
-      if (warning && Number.isFinite(total) && total > 0 && active > total) {
-        warning.hidden = false;
-        warning.textContent = "Active model memory exceeds available VRAM. Inference may fall back to system RAM or run slowly.";
-      }
-    } catch (error) {
+    if (vramRequest) return vramRequest;
+    vramRequest = window.api.getOllamaVramStatus(4096).then((status) => {
+      cachedVram = status;
+      renderVram(status);
+      return status;
+    }).catch((error) => {
       elements.vramActive.textContent = "N/A";
       elements.vramFreeable.textContent = "N/A";
       elements.vramContext.textContent = "N/A";
       elements.vramProgress.style.width = "0%";
       console.warn("Unable to retrieve Ollama VRAM status:", error.message);
-    }
+      return null;
+    }).finally(() => { vramRequest = null; });
+    return vramRequest;
   };
-
   const modelInstalled = (model) => installedModels.find((installed) => installed.name.toLowerCase() === model.ollama.toLowerCase() || installed.name.toLowerCase().startsWith(`${model.ollama.toLowerCase()}:`));
   const specGb = (value) => Number.parseFloat(String(value).replace(",", "."));
   const compatibility = (model) => {
@@ -272,6 +311,21 @@
     catch (error) { showError(error); }
     finally { button.disabled = false; }
   };
+  const smokeTestModel = async (model, button) => {
+    button.disabled = true;
+    const original = button.textContent;
+    button.textContent = t("testing", "Testing...");
+    try {
+      const installed = modelInstalled(model);
+      const result = await window.api.smokeTestModel(installed?.name || model.ollama);
+      showToast(`${model.name}: ${result.response || "smoke test passed"}`);
+    } catch (error) {
+      showError(error);
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  };
   const downloadCustomModel = async (event) => {
     event.preventDefault();
     const input = $("custom-model-name");
@@ -289,12 +343,12 @@
     const root = $("model-catalogue"); root.replaceChildren();
     const groups = [...new Set(visible.map((model) => model.category))];
     groups.forEach((group) => { const section = document.createElement("section"); section.className = "model-group"; section.innerHTML = `<div class="model-group-heading"><h3>${group}</h3><span>${visible.filter((model) => model.category === group).length} engines</span></div><div class="model-grid"></div>`; const grid = section.querySelector(".model-grid");
-      visible.filter((model) => model.category === group).forEach((model) => { const installed = modelInstalled(model); const fit = compatibility(model); const card = document.createElement("article"); card.className = "model-card"; card.dataset.modelId = model.id; card.innerHTML = `<button class="model-card-main" type="button"><span class="model-card-top"><span class="model-category">${model.category}</span><span class="model-status ${installed ? "is-installed" : ""}">${installed ? "Installed" : "Available"}</span></span><h4></h4><p class="model-description"></p><span class="model-card-meta"></span><span class="model-tags"></span><span class="model-performance" title=""></span></button><div class="model-card-actions"><button class="button button-small button-secondary model-run" type="button">Try / Run</button><button class="button button-small button-primary model-download" type="button">Download</button><button class="button button-small button-secondary model-remove" type="button">Remove</button></div>`;
-        card.querySelector("h4").textContent = model.name; card.querySelector(".model-description").textContent = model.description; card.querySelector(".model-card-meta").textContent = `${model.architecture} · ${model.context}`; card.querySelector(".model-tags").innerHTML = model.capabilities.slice(0, 3).map((item) => `<span class="model-tag">${item}</span>`).join("");
-        const performance = card.querySelector(".model-performance"); performance.textContent = model.vram || `~${model.minimum?.vram || "N/A"} VRAM`; performance.title = fit.reason; const run = card.querySelector(".model-run"); const download = card.querySelector(".model-download"); const remove = card.querySelector(".model-remove");
+      visible.filter((model) => model.category === group).forEach((model) => { const installed = modelInstalled(model); const fit = compatibility(model); const card = document.createElement("article"); card.className = "model-card"; card.dataset.modelId = model.id; card.innerHTML = `<button class="model-card-main" type="button"><span class="model-card-top"><span class="model-category">${model.category}</span><span class="model-status ${installed ? "is-installed" : ""}">${installed ? "Installed" : "Available"}</span></span><h4></h4><p class="model-description"></p><span class="model-card-meta"></span><span class="model-digest"></span><span class="model-tags"></span><span class="model-performance" title=""></span></button><div class="model-card-actions"><button class="button button-small button-secondary model-run" type="button">Try / Run</button><button class="button button-small button-secondary model-smoke" type="button">Smoke test</button><button class="button button-small button-primary model-download" type="button">Download</button><button class="button button-small button-secondary model-remove" type="button">Remove</button></div>`;
+        card.querySelector("h4").textContent = model.name; card.querySelector(".model-description").textContent = model.description; card.querySelector(".model-card-meta").textContent = `${model.architecture} · ${model.context}`; if (installed?.digest) makeCopyable(card.querySelector(".model-digest"), installed.digest, "Model hash"); card.querySelector(".model-tags").innerHTML = model.capabilities.slice(0, 3).map((item) => `<span class="model-tag">${item}</span>`).join("");
+        const performance = card.querySelector(".model-performance"); performance.textContent = model.vram || `~${model.minimum?.vram || "N/A"} VRAM`; performance.title = fit.reason; const run = card.querySelector(".model-run"); const smoke = card.querySelector(".model-smoke"); const download = card.querySelector(".model-download"); const remove = card.querySelector(".model-remove");
         card.querySelector(".model-status").textContent = installed ? t("installed", "Installed") : t("available", "Available");
         run.textContent = t("tryRun", "Try / Run"); download.textContent = t("download", "Download"); remove.textContent = t("remove", "Remove");
-        download.disabled = Boolean(installed); remove.disabled = !installed; run.addEventListener("click", () => runModel(model, run)); download.addEventListener("click", () => deployModel(model, download)); remove.addEventListener("click", () => removeModel(model, remove)); card.querySelector(".model-card-main").addEventListener("click", () => openModelDetails(model)); grid.append(card);
+        download.disabled = Boolean(installed); remove.disabled = !installed; smoke.disabled = !installed; run.addEventListener("click", () => runModel(model, run)); smoke.addEventListener("click", () => smokeTestModel(model, smoke)); download.addEventListener("click", () => deployModel(model, download)); remove.addEventListener("click", () => removeModel(model, remove)); card.querySelector(".model-card-main").addEventListener("click", () => openModelDetails(model)); grid.append(card);
       }); root.append(section);
     });
     $("catalogue-count").textContent = `${catalogue.length}`; $("installed-count").textContent = installedModelsLoaded ? `${installedModels.length} ${t("modelInstalled", "installed in Ollama")}` : t("checkingOllama", "Checking Ollama...");
@@ -349,17 +403,28 @@
     }
     if (payload.state === "error") $("download-speed").textContent = t("downloadFailed", "Download failed");
   };
+  const renderTelemetry = (telemetry) => {
+    if (!telemetry) return;
+    elements.error.hidden = true;
+    elements.temperature.textContent = telemetry.cpuTemperatureC === null ? "N/A" : telemetry.cpuTemperatureC.toFixed(1);
+    if (telemetry.cpuUsagePercent !== null) { addHistoryPoint("cpu", telemetry.cpuUsagePercent); elements.chartCpuValue.textContent = `${telemetry.cpuUsagePercent}%`; }
+    if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); elements.chartNetworkValue.textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
+    if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); elements.chartRamValue.textContent = `${telemetry.memory.usagePercent}%`; updateCapacityCard("ram", telemetry.memory.usagePercent, `${(telemetry.memory.usedMb / 1024).toFixed(1)} / ${(telemetry.memory.totalMb / 1024).toFixed(1)} GB`); }
+    if (telemetry.disk) { const diskRate = (telemetry.disk.readBytesPerSecond || 0) + (telemetry.disk.writeBytesPerSecond || 0); addHistoryPoint("disk", diskRate); elements.chartDiskValue.textContent = `${(diskRate / 1024 / 1024).toFixed(1)} MB/s`; renderStorage(telemetry.disk); }
+    renderChart("cpu-chart", history.cpu, "#2ea043", 0, 100); renderChart("ram-chart", history.ram, "#56d364", 0, 100); renderChart("network-chart", history.network, "#8b949e"); renderChart("disk-chart", history.disk, "#c9d1d9"); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
+  };
   const refresh = async () => {
-    if (refreshInFlight) return; refreshInFlight = true;
-    try {
-      const [telemetry] = await Promise.all([window.api.getTelemetry(), refreshVram()]);
-      elements.error.hidden = true; elements.temperature.textContent = telemetry.cpuTemperatureC === null ? "N/A" : telemetry.cpuTemperatureC.toFixed(1);
-      if (telemetry.cpuUsagePercent !== null) { addHistoryPoint("cpu", telemetry.cpuUsagePercent); elements.chartCpuValue.textContent = `${telemetry.cpuUsagePercent}%`; }
-      if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); elements.chartNetworkValue.textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
-      if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); elements.chartRamValue.textContent = `${telemetry.memory.usagePercent}%`; updateCapacityCard("ram", telemetry.memory.usagePercent, `${(telemetry.memory.usedMb / 1024).toFixed(1)} / ${(telemetry.memory.totalMb / 1024).toFixed(1)} GB`); }
-      if (telemetry.disk) { const diskRate = (telemetry.disk.readBytesPerSecond || 0) + (telemetry.disk.writeBytesPerSecond || 0); addHistoryPoint("disk", diskRate); elements.chartDiskValue.textContent = `${(diskRate / 1024 / 1024).toFixed(1)} MB/s`; renderStorage(telemetry.disk); }
-      renderChart("cpu-chart", history.cpu, "#2ea043", 0, 100); renderChart("ram-chart", history.ram, "#56d364", 0, 100); renderChart("network-chart", history.network, "#8b949e"); renderChart("disk-chart", history.disk, "#c9d1d9"); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
-    } catch (error) { showError(error); } finally { refreshInFlight = false; }
+    if (cachedTelemetry) renderTelemetry(cachedTelemetry);
+    if (cachedVram) renderVram(cachedVram);
+    if (refreshInFlight) return;
+    refreshInFlight = true;
+    telemetryRequest = window.api.getTelemetry().then((telemetry) => {
+      cachedTelemetry = telemetry;
+      renderTelemetry(telemetry);
+      return telemetry;
+    }).catch((error) => { showError(error); return null; });
+    await Promise.allSettled([telemetryRequest, refreshVram()]);
+    refreshInFlight = false;
   };
 
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character]));
@@ -373,6 +438,18 @@
     await navigator.clipboard.writeText(decodeURIComponent(button.dataset.code));
     button.textContent = t("copied", "Copied");
   }));
+
+  document.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-copy-value]");
+    if (target) void copyValue(target.dataset.copyValue, target.dataset.copyLabel || "Value");
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const target = event.target.closest("[data-copy-value]");
+    if (!target) return;
+    event.preventDefault();
+    void copyValue(target.dataset.copyValue, target.dataset.copyLabel || "Value");
+  });
 
   const initializeChat = () => {
     $("chat-model-select").addEventListener("change", (event) => { setChatModel(event.target.value); $("chat-messages").replaceChildren(); });

@@ -370,6 +370,7 @@ const parseOllamaModels = (output) => {
       ? data.models.map((model) => ({
         name: model.name || model.model || "",
         size: Number(model.size || 0),
+        digest: model.digest || "",
         modifiedAt: model.modified_at || null
       })).filter((model) => model.name)
       : [];
@@ -894,6 +895,23 @@ ipcMain.handle("ssh:run-model", async (_event, model) => {
   const result = await executeRemoteResult(command, { timeoutMs: 15000 });
   if (result.code !== 0) throw new Error(result.stderr || "Unable to start the Ollama model.");
   return { model, started: true };
+});
+
+ipcMain.handle("ssh:smoke-test-model", async (_event, model) => {
+  if (!deploymentModel(model)) throw new Error("Invalid AI model name.");
+  const body = JSON.stringify({ model, prompt: "Reply with exactly: SHIPAI_OK", stream: false });
+  const result = await executeRemoteResult(
+    `curl -fsS --max-time 45 http://127.0.0.1:11434/api/generate -H 'Content-Type: application/json' --data ${shellQuote(body)}`,
+    { timeoutMs: 60000 }
+  );
+  if (result.code !== 0) throw new Error(result.stderr || "Ollama smoke test failed.");
+  let response;
+  try {
+    response = JSON.parse(result.stdout);
+  } catch {
+    throw new Error("Ollama returned an invalid smoke-test response.");
+  }
+  return { model, response: String(response.response || "").trim(), completed: response.done !== false };
 });
 
 ipcMain.handle("ollama:get-vram-status", async (_event, request) => getOllamaVramStatus(request?.contextTokens));

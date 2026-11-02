@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld("api", Object.freeze({
   deployService: (configuration) => ipcRenderer.invoke("ssh:deploy-service", configuration),
   removeModel: (model) => ipcRenderer.invoke("ssh:remove-model", model),
   runModel: (model) => ipcRenderer.invoke("ssh:run-model", model),
+  smokeTestModel: (model) => ipcRenderer.invoke("ssh:smoke-test-model", model),
   powerAction: (action) => ipcRenderer.invoke("ssh:power-action", action),
   sendChatPrompt: (model, prompt, requestId) => ipcRenderer.invoke("ssh:chat", { model, prompt, requestId }),
   cancelChat: (requestId) => ipcRenderer.invoke("ssh:cancel-chat", requestId),
