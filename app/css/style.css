@@ -970,9 +970,6 @@ html, body {
 .chat-studio .chat-model-selector select {
   min-width: 200px;
 }
-.chat-studio .chat-memory {
-  font-family: var(--font-mono);
-}
 .chat-studio .chat-composer textarea {
   min-height: 32px;
 }

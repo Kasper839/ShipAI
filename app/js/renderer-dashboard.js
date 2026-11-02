@@ -7,7 +7,7 @@
   const elements = {
     temperature: $("cpu-temperature"), ramUsage: $("ram-usage"), ramTotal: $("ram-total"),
     ramProgress: $("ram-progress"),
-    refresh: $("refresh-button"), disconnect: $("disconnect-button"), error: $("dashboard-error"),
+    disconnect: $("disconnect-button"), error: $("dashboard-error"),
     environmentWarning: $("environment-warning"), updated: $("charts-status"),
     dockerStatus: $("docker-status"),
     containerCount: $("container-count"), tableBody: $("containers-table-body"),
@@ -20,10 +20,13 @@
   const refreshInstalledModels = async () => {
     try {
       const models = await window.api.getInstalledModels();
-      installedModels = Array.isArray(models) ? models : [];
+      const nextModels = Array.isArray(models) ? models : [];
+      const previous = installedModels.map((model) => model.name).sort().join("|");
+      const next = nextModels.map((model) => model.name).sort().join("|");
+      installedModels = nextModels;
       installedModelsLoaded = true;
       populateChatModels();
-      renderCatalogue();
+      if (previous !== next) renderCatalogue();
     } catch (error) {
       console.warn("Unable to refresh installed Ollama models:", error.message);
     }
@@ -31,6 +34,7 @@
   const history = { cpu: [], ram: [], network: [], disk: [] };
   let refreshInFlight = false;
   let refreshTimer;
+  let modelSyncTimer;
   let dockerRepairTimer;
   let hardware = null;
   let catalogue = [];
@@ -346,16 +350,16 @@
     if (payload.state === "error") $("download-speed").textContent = t("downloadFailed", "Download failed");
   };
   const refresh = async () => {
-    if (refreshInFlight) return; refreshInFlight = true; elements.refresh.disabled = true;
+    if (refreshInFlight) return; refreshInFlight = true;
     try {
-      const telemetry = await window.api.getTelemetry(); elements.error.hidden = true; elements.temperature.textContent = telemetry.cpuTemperatureC === null ? "N/A" : telemetry.cpuTemperatureC.toFixed(1);
-      await refreshVram();
+      const [telemetry] = await Promise.all([window.api.getTelemetry(), refreshVram()]);
+      elements.error.hidden = true; elements.temperature.textContent = telemetry.cpuTemperatureC === null ? "N/A" : telemetry.cpuTemperatureC.toFixed(1);
       if (telemetry.cpuUsagePercent !== null) { addHistoryPoint("cpu", telemetry.cpuUsagePercent); elements.chartCpuValue.textContent = `${telemetry.cpuUsagePercent}%`; }
       if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); elements.chartNetworkValue.textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
       if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); elements.chartRamValue.textContent = `${telemetry.memory.usagePercent}%`; updateCapacityCard("ram", telemetry.memory.usagePercent, `${(telemetry.memory.usedMb / 1024).toFixed(1)} / ${(telemetry.memory.totalMb / 1024).toFixed(1)} GB`); }
       if (telemetry.disk) { const diskRate = (telemetry.disk.readBytesPerSecond || 0) + (telemetry.disk.writeBytesPerSecond || 0); addHistoryPoint("disk", diskRate); elements.chartDiskValue.textContent = `${(diskRate / 1024 / 1024).toFixed(1)} MB/s`; renderStorage(telemetry.disk); }
-      renderChart("cpu-chart", history.cpu, "#818cf8", 0, 100); renderChart("ram-chart", history.ram, "#2dd4bf", 0, 100); renderChart("network-chart", history.network, "#f59e0b"); renderChart("disk-chart", history.disk, "#f472b6"); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
-    } catch (error) { showError(error); } finally { elements.refresh.disabled = false; refreshInFlight = false; }
+      renderChart("cpu-chart", history.cpu, "#2ea043", 0, 100); renderChart("ram-chart", history.ram, "#56d364", 0, 100); renderChart("network-chart", history.network, "#8b949e"); renderChart("disk-chart", history.disk, "#c9d1d9"); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
+    } catch (error) { showError(error); } finally { refreshInFlight = false; }
   };
 
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character]));
@@ -383,7 +387,6 @@
       response.streaming = false;
       $("chat-stop").hidden = true;
       $("chat-send").disabled = !chatModel;
-      $("chat-memory").textContent = t("idle", "Idle");
       try { await window.api.cancelChat(response.requestId); }
       catch (error) { console.error("[Chat] Unable to cancel generation:", error); }
     });
@@ -391,7 +394,7 @@
       if (payload.requestId !== chatResponse?.requestId || chatResponse.cancelled) return;
       if (payload.type === "token") chatResponse.querySelector(".chat-markdown").insertAdjacentHTML("beforeend", markdownToHtml(payload.data, true));
       if (payload.type === "error") chatResponse.querySelector(".chat-markdown").insertAdjacentHTML("beforeend", `<p class="chat-error">${escapeHtml(payload.data)}</p>`);
-      if (payload.type === "done" || payload.type === "error") { chatResponse.streaming = false; bindCopyButtons(chatResponse); $("chat-memory").textContent = t("idle", "Idle"); $("chat-stop").hidden = true; $("chat-send").disabled = !chatModel; }
+      if (payload.type === "done" || payload.type === "error") { chatResponse.streaming = false; bindCopyButtons(chatResponse); $("chat-stop").hidden = true; $("chat-send").disabled = !chatModel; }
       $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
     });
     $("chat-form").addEventListener("submit", async (event) => {
@@ -402,10 +405,10 @@
       const messages = $("chat-messages");
       const user = document.createElement("article"); user.className = "chat-message chat-message--user"; user.textContent = prompt; messages.append(user);
       chatResponse = document.createElement("article"); chatResponse.className = "chat-message chat-message--assistant"; chatResponse.requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; chatResponse.streaming = true; chatResponse.cancelled = false; chatResponse.innerHTML = '<div class="chat-markdown"></div>'; messages.append(chatResponse);
-      input.value = ""; input.style.height = "auto"; $("chat-send").disabled = true; $("chat-stop").hidden = false; $("chat-memory").textContent = t("responding", "Responding");
+      input.value = ""; input.style.height = "auto"; $("chat-send").disabled = true; $("chat-stop").hidden = false;
       try { await window.api.sendChatPrompt(chatModel, prompt, chatResponse.requestId); }
       catch (error) { if (!chatResponse.cancelled) chatResponse.querySelector(".chat-markdown").innerHTML = `<p class="chat-error">${escapeHtml(error.message)}</p>`; }
-      finally { chatResponse.streaming = false; $("chat-send").disabled = !chatModel; $("chat-stop").hidden = true; $("chat-memory").textContent = t("idle", "Idle"); }
+      finally { chatResponse.streaming = false; $("chat-send").disabled = !chatModel; $("chat-stop").hidden = true; }
     });
   };
   $("dashboard-tabs").addEventListener("click", (event) => {
@@ -421,8 +424,7 @@
     setDashboardTab(tab.dataset.dashboardTab);
   });
   document.querySelectorAll("[data-dashboard-tab]:not(#dashboard-tabs [data-dashboard-tab])").forEach((tab) => tab.addEventListener("click", () => setDashboardTab(tab.dataset.dashboardTab)));
-  $("hero-refresh")?.addEventListener("click", () => refresh());
-  $("model-search").addEventListener("input", renderCatalogue); $("model-category").addEventListener("change", renderCatalogue); $("custom-model-form").addEventListener("submit", downloadCustomModel); elements.refresh.addEventListener("click", refresh);
+  $("model-search").addEventListener("input", renderCatalogue); $("model-category").addEventListener("change", renderCatalogue); $("custom-model-form").addEventListener("submit", downloadCustomModel);
   elements.flushVram.addEventListener("click", async () => { elements.flushVram.disabled = true; try { await window.api.flushOllamaVram(); await refreshVram(); showToast("VRAM flushed."); } catch (error) { showError(error); } finally { elements.flushVram.disabled = false; } });
   const requestPowerAction = (action, label) => {
     if (!window.confirm(`Are you sure you want to ${label} the remote server?`)) return;
@@ -446,6 +448,6 @@
     }
     updateModelProgress({ ...data, state: data.status === "success" ? "complete" : "downloading" });
   };
-  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { const wasCancelled = cancelledDownloadJobs.has(payload.jobId); if (!wasCancelled) updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete" || payload.state === "error" || payload.state === "cancelled") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (payload.jobId === activeDownloadJobId) activeDownloadJobId = ""; if ((payload.state === "error" || payload.state === "cancelled") && task) taskTabs.delete(task.taskId); if (task && payload.state === "complete" && !wasCancelled) openTaskChat(task); if (payload.state === "error" && !wasCancelled && payload.message !== "Model download cancelled.") showError(new Error(payload.message || "Model download failed.")); if (payload.state === "complete" && !wasCancelled) void refreshInstalledModels(); if (wasCancelled) cancelledDownloadJobs.delete(payload.jobId); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); elements.cancelDownload?.addEventListener("click", async () => { const cancelledJobId = activeDownloadJobId; if (!cancelledJobId) return; cancelledDownloadJobs.add(cancelledJobId); const cancelledModel = activeDownloadModel; activeDownloadJobId = ""; const panel = $("model-progress"); panel.hidden = true; panel.dataset.active = "false"; elements.cancelDownload.hidden = true; elements.cancelDownload.disabled = true; const task = [...taskTabs.values()].find((item) => item.jobId === cancelledJobId); if (task) taskTabs.delete(task.taskId); try { await window.api.cancelOllamaPull(cancelledJobId); } catch { } showToast(`${cancelledModel || "Model"} download cancelled.`); }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); refresh(); refreshTimer = window.setInterval(refresh, 3000);
-  elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); await window.api.disconnect(); window.location.assign("index.html"); });
+  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { const wasCancelled = cancelledDownloadJobs.has(payload.jobId); if (!wasCancelled) updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete" || payload.state === "error" || payload.state === "cancelled") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (payload.jobId === activeDownloadJobId) activeDownloadJobId = ""; if ((payload.state === "error" || payload.state === "cancelled") && task) taskTabs.delete(task.taskId); if (task && payload.state === "complete" && !wasCancelled) openTaskChat(task); if (payload.state === "error" && !wasCancelled && payload.message !== "Model download cancelled.") showError(new Error(payload.message || "Model download failed.")); if (payload.state === "complete" && !wasCancelled) void refreshInstalledModels(); if (wasCancelled) cancelledDownloadJobs.delete(payload.jobId); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); window.clearInterval(modelSyncTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); elements.cancelDownload?.addEventListener("click", async () => { const cancelledJobId = activeDownloadJobId; if (!cancelledJobId) return; cancelledDownloadJobs.add(cancelledJobId); const cancelledModel = activeDownloadModel; activeDownloadJobId = ""; const panel = $("model-progress"); panel.hidden = true; panel.dataset.active = "false"; elements.cancelDownload.hidden = true; elements.cancelDownload.disabled = true; const task = [...taskTabs.values()].find((item) => item.jobId === cancelledJobId); if (task) taskTabs.delete(task.taskId); try { await window.api.cancelOllamaPull(cancelledJobId); } catch { } showToast(`${cancelledModel || "Model"} download cancelled.`);   }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); void refresh(); void refreshInstalledModels(); refreshTimer = window.setInterval(refresh, 3000); modelSyncTimer = window.setInterval(() => { void refreshInstalledModels(); }, 10000);
+  elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); window.clearInterval(modelSyncTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();

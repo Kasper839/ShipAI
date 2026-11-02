@@ -55,8 +55,6 @@
           <span id="progress-bar-fill" class="progress-value" style="width: 0%"></span>
         </div>
       </section>
-      <button id="refresh-button" class="button button-secondary dashboard-refresh-control" type="button" data-i18n="refresh">Refresh data</button>
-
       <div id="dashboard-error" class="error-banner" role="alert" hidden></div>
       <div class="dashboard-view" data-dashboard-view="marketplace" hidden>
         <section class="marketplace-hero">
@@ -82,7 +80,6 @@
             <p>See what is running, what needs attention and how much room is left — all in one calm workspace.</p>
             <div class="hero-actions">
               <button class="button button-primary" type="button" data-dashboard-tab="ai-chat">Open chat</button>
-              <button class="button button-quiet" id="hero-refresh" type="button"><span aria-hidden="true">↻</span> Sync telemetry</button>
             </div>
           </div>
           <div class="hero-orbit" aria-hidden="true">
@@ -156,7 +153,6 @@
           <header class="chat-studio-header">
             <div class="chat-studio-actions">
               <label class="chat-model-selector" for="chat-model-select"><span data-i18n="installedModel">Installed model</span><select id="chat-model-select" data-i18n-aria-label="selectModel" aria-label="Select Installed Model"><option value="" data-i18n="loadingModels">Loading installed models...</option></select></label>
-              <span id="chat-memory" class="status-badge status-badge--neutral" data-i18n="idle">Idle</span>
               <button id="clear-chat" class="button button-secondary" data-i18n="clearConversation" type="button">Clear Conversation</button>
             </div>
           </header>
