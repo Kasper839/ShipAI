@@ -63,7 +63,7 @@ Running a private AI server often means switching between SSH terminals, Docker 
 
 - Confirmed remote restart and shutdown actions
 - Uses the active sudo session and reports command failures explicitly
-
+.
 ### 🔒 Zero-cloud privacy
 
 - Direct SSH connection from the desktop to the target host
