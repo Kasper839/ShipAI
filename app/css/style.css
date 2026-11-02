@@ -1064,6 +1064,62 @@ html, body {
   }
 }
 
+/* Full-height chat chain: viewport -> main -> chat view -> transcript/composer. */
+html,
+body {
+  height: 100%;
+  min-height: 0;
+}
+.app-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.dashboard-layout,
+.dashboard-layout.is-chat-studio {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: auto;
+  min-height: 0;
+}
+.dashboard-layout.is-chat-studio {
+  overflow: hidden;
+  padding: 0;
+}
+.chat-studio-view {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  width: 100%;
+}
+.chat-studio {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+.chat-studio-messages {
+  flex: 1 1 auto;
+  height: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.chat-composer-shell {
+  flex: 0 0 auto;
+  position: sticky;
+}
+
+@media (max-width: 720px) {
+  .dashboard-layout,
+  .dashboard-layout.is-chat-studio {
+    min-height: 0;
+  }
+  .chat-studio-view {
+    min-height: 0;
+  }
+}
+
 /* Chat workspace: keep the transcript flexible and the composer anchored. */
 .dashboard-layout.is-chat-studio {
   display: flex;
@@ -1283,4 +1339,112 @@ html, body {
     padding-left: 10px;
     padding-right: 10px;
   }
+}
+
+/* Final full-height overrides must remain last so legacy chat rules cannot shrink the view. */
+html,
+body {
+  height: 100%;
+  min-height: 0;
+}
+.app-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.dashboard-layout,
+.dashboard-layout.is-chat-studio {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: auto;
+  min-height: 0;
+}
+.dashboard-layout.is-chat-studio {
+  overflow: hidden;
+  padding: 0;
+}
+.chat-studio-view {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  width: 100%;
+}
+.chat-studio {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+.chat-studio-messages {
+  flex: 1 1 auto;
+  height: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.chat-composer-shell {
+  flex: 0 0 auto;
+  position: sticky;
+}
+@media (max-width: 720px) {
+  .dashboard-layout,
+  .dashboard-layout.is-chat-studio,
+  .chat-studio-view {
+    min-height: 0;
+  }
+}
+
+/* Final chat sizing: the main area owns the remaining viewport, without a bottom gap. */
+html,
+body {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.app-body {
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+.dashboard-topbar {
+  flex: 0 0 auto;
+}
+.dashboard-layout.is-chat-studio {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+.dashboard-layout.is-chat-studio > .chat-studio-view {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+.dashboard-layout.is-chat-studio .chat-studio {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding-bottom: 0;
+  width: 100%;
+}
+.dashboard-layout.is-chat-studio .chat-studio-messages {
+  flex: 1 1 auto;
+  height: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.dashboard-layout.is-chat-studio .chat-composer-shell {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+  position: relative;
 }
