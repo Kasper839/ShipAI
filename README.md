@@ -18,6 +18,16 @@ Running a private AI server often means switching between SSH terminals, Docker 
 
 ## Key features
 
+### 🚀 v1.3.0 highlights
+
+- Sleek real-time Ollama model download card with percentage, speed, transferred size, and progress bar
+- Cancel active model downloads without leaving a partial download state in the dashboard
+- Live Ollama VRAM telemetry from `/api/ps`, including active model size, freeable VRAM, and context overhead
+- Hardware-aware warnings when a model exceeds the detected GPU memory
+- Clear connection-lost and reconnect states for interrupted SSH sessions
+- More resilient telemetry polling, IPC error handling, and model installation feedback
+- Docker management remains available in the backend while the dashboard experience is being prepared for a future release
+
 ### ✨ v1.1.0 highlights
 
 - Save multiple SSH server profiles locally and select them from the connection screen
@@ -44,11 +54,10 @@ Running a private AI server often means switching between SSH terminals, Docker 
 
 ### 🐳 Docker and Ollama management
 
-- Inspect running and stopped containers
-- Start, stop, restart, and view recent container logs
-- Initialize the remote Docker environment when required
+- Docker management UI is currently marked as coming soon while the experience is being prepared
+- Existing Docker initialization and management code remains in the backend for a future release
 - Install or detect Ollama on the host
-- Pull models and start the Ollama service remotely
+- Pull models, monitor progress, cancel downloads, and start the Ollama service remotely
 
 ### ⚡ Power controls
 
@@ -58,7 +67,7 @@ Running a private AI server often means switching between SSH terminals, Docker 
 ### 🔒 Zero-cloud privacy
 
 - Direct SSH connection from the desktop to the target host
-- No ShipAI account, hosted API, or third-party telemetry service
+- No ShipAI account or hosted control plane; optional anonymous lifecycle telemetry uses PostHog only when `POSTHOG_API_KEY` is configured
 - Saved SSH passwords are encrypted with the local operating system credential store; sudo passwords remain session-only
 - Prompts, model traffic, and operational commands stay on your infrastructure
 

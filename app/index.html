@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f8fafc" />
+    <meta name="theme-color" content="#0b0f14" />
     <title>ShipAI | Connect server</title>
     <link rel="stylesheet" href="css/style.css" />
     <script src="js/i18n.js" defer></script>
@@ -12,8 +12,10 @@
   <body class="app-body">
     <header class="topbar">
       <a class="brand" href="index.html" aria-label="ShipAI home">
-        <span class="brand-mark" aria-hidden="true">S</span>
-        <span class="brand-name">ShipAI</span>
+        <span class="brand-mark brand-mark--ship" aria-hidden="true">
+          <svg viewBox="0 0 32 32" role="img"><path d="M5 18.5 9.5 9h13l4.5 9.5-4 4.5H9z"/><path d="M9.5 9 16 14l6.5-5M8 18.5h16M12 23v3m8-3v3"/></svg>
+        </span>
+        <span class="brand-lockup"><span class="brand-name">ShipAI</span><span class="brand-caption">PRIVATE AI CONTROL</span></span>
       </a>
       <span class="topbar-caption" data-i18n="infrastructure">Infrastructure operations</span>
       <label class="language-control" for="language-select"><span class="sr-only" data-i18n="language">Language</span><select id="language-select" data-i18n-aria-label="language" aria-label="Language"></select></label>

@@ -3,18 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f8fafc" />
-    <title>ShipAI | Server dashboard</title>
+    <meta name="theme-color" content="#0b0f14" />
+    <title>ShipAI | Command center</title>
     <link rel="stylesheet" href="css/style.css" />
     <script src="js/i18n.js" defer></script>
     <script src="js/renderer-dashboard.js" defer></script>
   </head>
   <body class="app-body">
     <header class="topbar dashboard-topbar">
-      <a class="brand" href="dashboard.html" aria-label="ShipAI dashboard">
-        <span class="brand-mark" aria-hidden="true">S</span>
-        <span class="brand-name">ShipAI</span>
+      <a class="brand" href="dashboard.html" aria-label="ShipAI command center">
+        <span class="brand-mark brand-mark--ship" aria-hidden="true">
+          <svg viewBox="0 0 32 32" role="img"><path d="M5 18.5 9.5 9h13l4.5 9.5-4 4.5H9z"/><path d="M9.5 9 16 14l6.5-5M8 18.5h16M12 23v3m8-3v3"/></svg>
+        </span>
+        <span class="brand-lockup"><span class="brand-name">ShipAI</span><span class="brand-caption">PRIVATE AI CONTROL</span></span>
       </a>
+      <div class="topbar-context">
+        <span class="context-kicker">COMMAND CENTER</span>
+        <span class="context-divider" aria-hidden="true"></span>
+        <span class="context-value">Remote infrastructure</span>
+      </div>
       <nav id="dashboard-tabs" class="dashboard-tabs" data-i18n-aria-label="dashboardSections" aria-label="Dashboard sections">
         <button class="dashboard-tab is-active" type="button" data-dashboard-tab="overview" data-i18n="stats" aria-selected="true">Server statistics</button>
         <button class="dashboard-tab" type="button" data-dashboard-tab="docker">Docker <span class="dashboard-tab-status">Coming soon</span></button>
@@ -23,8 +30,8 @@
       </nav>
       <div class="dashboard-actions">
         <label class="language-control" for="language-select"><span class="sr-only" data-i18n="language">Language</span><select id="language-select" data-i18n-aria-label="language" aria-label="Language"></select></label>
-        <button id="restart-server" class="button button-secondary" type="button" data-i18n="restart">Restart server</button>
-        <button id="shutdown-server" class="button button-danger" type="button" data-i18n="shutdown">Shutdown server</button>
+        <button id="restart-server" class="button button-secondary" type="button" data-i18n="restart"><span aria-hidden="true">↻</span> Restart</button>
+        <button id="shutdown-server" class="button button-danger" type="button" data-i18n="shutdown"><span aria-hidden="true">⏻</span> Shutdown</button>
         <button id="disconnect-button" class="button button-secondary" type="button" data-i18n="disconnect">Disconnect</button>
       </div>
     </header>
@@ -68,6 +75,28 @@
         <div id="deployment-log" class="deployment-log" role="log" aria-live="polite" hidden></div>
       </div>
       <div class="dashboard-view is-active" data-dashboard-view="overview">
+        <section class="command-hero" aria-labelledby="command-title">
+          <div class="command-hero-copy">
+            <div class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> YOUR SERVER AT A GLANCE</div>
+            <h1 id="command-title">A clear view<br><em>of your server.</em></h1>
+            <p>See what is running, what needs attention and how much room is left — all in one calm workspace.</p>
+            <div class="hero-actions">
+              <button class="button button-primary" type="button" data-dashboard-tab="ai-chat">Open chat</button>
+              <button class="button button-quiet" id="hero-refresh" type="button"><span aria-hidden="true">↻</span> Sync telemetry</button>
+            </div>
+          </div>
+          <div class="hero-orbit" aria-hidden="true">
+            <div class="orbit-ring orbit-ring--outer"></div><div class="orbit-ring orbit-ring--inner"></div>
+            <div class="orbit-core"><span>SHIP</span><strong>AI</strong></div>
+            <span class="orbit-node orbit-node--one"></span><span class="orbit-node orbit-node--two"></span><span class="orbit-node orbit-node--three"></span>
+          </div>
+        </section>
+        <section class="capacity-strip" aria-label="Live capacity">
+          <article class="capacity-card capacity-card--ram"><div class="capacity-icon">◒</div><div class="capacity-copy"><span>System RAM</span><strong id="capacity-ram-value">—</strong></div><div class="capacity-meter"><span id="capacity-ram-meter"></span></div><small id="capacity-ram-meta">Awaiting telemetry</small></article>
+          <article class="capacity-card capacity-card--vram"><div class="capacity-icon">✦</div><div class="capacity-copy"><span>GPU / VRAM</span><strong id="capacity-vram-value">—</strong></div><div class="capacity-meter"><span id="capacity-vram-meter"></span></div><small id="capacity-vram-meta">Ollama capacity</small></article>
+          <article class="capacity-card capacity-card--docker"><div class="capacity-icon">▦</div><div class="capacity-copy"><span>Docker runtime</span><strong id="capacity-docker-value">Syncing</strong></div><div class="capacity-status"><span class="status-dot status-dot--success"></span><small id="capacity-docker-meta">Checking environment</small></div></article>
+        </section>
+        <div id="docker-status" class="sr-only" role="status" aria-live="polite"></div>
         <div id="environment-warning" class="warning-banner" role="alert" hidden></div>
         <section class="panel charts-panel" aria-labelledby="charts-title">
           <div class="panel-header panel-header--status"><span id="charts-status" class="updated-label" role="status" aria-live="polite" data-i18n="waitingTelemetry">Waiting for telemetry</span></div>

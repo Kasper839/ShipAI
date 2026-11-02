@@ -139,6 +139,10 @@
   const renderDockerStatus = (docker) => {
     if (!elements.dockerStatus) return;
     const available = docker?.dockerAvailable === true;
+    const dockerValue = $("capacity-docker-value");
+    const dockerMeta = $("capacity-docker-meta");
+    if (dockerValue) dockerValue.textContent = available ? "Ready" : "Offline";
+    if (dockerMeta) dockerMeta.textContent = available ? "Connected environment" : "Requires attention";
     elements.dockerStatus.hidden = available;
     if (!available) elements.dockerStatus.textContent = docker?.error || "Docker is synchronizing over SSH.";
     renderContainers(available ? (docker.containers || []) : []);
@@ -188,6 +192,16 @@
     });
   };
   const formatBytes = (bytes) => { if (!Number.isFinite(bytes)) return "N/A"; if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`; return `${(bytes / 1024 ** 3).toFixed(1)} GB`; };
+  const updateCapacityCard = (kind, percent, meta) => {
+    const value = $(`capacity-${kind}-value`);
+    const meter = $(`capacity-${kind}-meter`);
+    const detail = $(`capacity-${kind}-meta`);
+    if (!value || !meter || !detail || !Number.isFinite(Number(percent))) return;
+    const safePercent = Math.max(0, Math.min(100, Number(percent)));
+    value.textContent = `${Math.round(safePercent)}%`;
+    meter.style.width = `${safePercent}%`;
+    detail.textContent = meta;
+  };
   const refreshVram = async () => {
     try {
       const status = await window.api.getOllamaVramStatus(4096);
@@ -197,6 +211,7 @@
       elements.vramFreeable.textContent = formatBytes(Number.isFinite(Number(status.freeableVramBytes)) ? Number(status.freeableVramBytes) : 0);
       elements.vramContext.textContent = formatBytes(Number.isFinite(Number(status.estimatedContextOverheadBytes)) ? Number(status.estimatedContextOverheadBytes) : 0);
       elements.vramProgress.style.width = `${total > 0 ? Math.min(100, active / total * 100) : 0}%`;
+      updateCapacityCard("vram", total > 0 ? active / total * 100 : 0, `${formatBytes(Number.isFinite(active) ? active : 0)} active · ${formatBytes(Number.isFinite(total) ? total : 0)} total`);
       const warning = $("environment-warning");
       if (warning && Number.isFinite(total) && total > 0 && active > total) {
         warning.hidden = false;
@@ -337,7 +352,7 @@
       await refreshVram();
       if (telemetry.cpuUsagePercent !== null) { addHistoryPoint("cpu", telemetry.cpuUsagePercent); elements.chartCpuValue.textContent = `${telemetry.cpuUsagePercent}%`; }
       if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); elements.chartNetworkValue.textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
-      if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); elements.chartRamValue.textContent = `${telemetry.memory.usagePercent}%`; }
+      if (telemetry.memory) { elements.ramUsage.textContent = (telemetry.memory.usedMb / 1024).toFixed(1); elements.ramTotal.textContent = (telemetry.memory.totalMb / 1024).toFixed(1); elements.ramProgress.style.width = `${telemetry.memory.usagePercent}%`; addHistoryPoint("ram", telemetry.memory.usagePercent); elements.chartRamValue.textContent = `${telemetry.memory.usagePercent}%`; updateCapacityCard("ram", telemetry.memory.usagePercent, `${(telemetry.memory.usedMb / 1024).toFixed(1)} / ${(telemetry.memory.totalMb / 1024).toFixed(1)} GB`); }
       if (telemetry.disk) { const diskRate = (telemetry.disk.readBytesPerSecond || 0) + (telemetry.disk.writeBytesPerSecond || 0); addHistoryPoint("disk", diskRate); elements.chartDiskValue.textContent = `${(diskRate / 1024 / 1024).toFixed(1)} MB/s`; renderStorage(telemetry.disk); }
       renderChart("cpu-chart", history.cpu, "#818cf8", 0, 100); renderChart("ram-chart", history.ram, "#2dd4bf", 0, 100); renderChart("network-chart", history.network, "#f59e0b"); renderChart("disk-chart", history.disk, "#f472b6"); elements.updated.textContent = `Updated ${new Date(telemetry.timestamp).toLocaleTimeString()}`;
     } catch (error) { showError(error); } finally { elements.refresh.disabled = false; refreshInFlight = false; }
@@ -405,6 +420,8 @@
     event.preventDefault();
     setDashboardTab(tab.dataset.dashboardTab);
   });
+  document.querySelectorAll("[data-dashboard-tab]:not(#dashboard-tabs [data-dashboard-tab])").forEach((tab) => tab.addEventListener("click", () => setDashboardTab(tab.dataset.dashboardTab)));
+  $("hero-refresh")?.addEventListener("click", () => refresh());
   $("model-search").addEventListener("input", renderCatalogue); $("model-category").addEventListener("change", renderCatalogue); $("custom-model-form").addEventListener("submit", downloadCustomModel); elements.refresh.addEventListener("click", refresh);
   elements.flushVram.addEventListener("click", async () => { elements.flushVram.disabled = true; try { await window.api.flushOllamaVram(); await refreshVram(); showToast("VRAM flushed."); } catch (error) { showError(error); } finally { elements.flushVram.disabled = false; } });
   const requestPowerAction = (action, label) => {
