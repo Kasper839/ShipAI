@@ -2,7 +2,7 @@
 
 [![GitHub Downloads](https://img.shields.io/github/downloads/Kasper839/ShipAI/total?style=for-the-badge&color=blue)](https://github.com/Kasper839/ShipAI/releases)
 
-## Private infrastructure control for Linux AI servers.
+## Private infrastructure control for Linux AI servers
 
 **ShipAI is a private-by-design Electron desktop control plane for remote Linux server management, Docker telemetry, and hardware-aware Ollama model deployment over SSH.** Connect to a host, understand its live capacity, operate its AI infrastructure, and deploy a model that fits—without sending your infrastructure or prompts through a hosted control plane.
 
