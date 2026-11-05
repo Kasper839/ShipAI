@@ -434,6 +434,7 @@ body { background-image: none; }
   min-height: 36px;
   padding: 0 12px;
   text-align: left;
+  width: 100%;
 }
 .shipai-sidebar .dashboard-tab::before {
   color: var(--subtle);
@@ -2034,8 +2035,23 @@ body {
   border-top: 0;
   align-items: stretch;
   background: transparent;
+  display: grid;
   gap: 4px;
+  grid-template-columns: minmax(0, 1fr);
   justify-content: flex-start;
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+}
+
+.shipai-sidebar .dashboard-actions > .button,
+.shipai-sidebar .dashboard-actions > .language-control {
+  align-self: stretch;
+  display: flex;
+  flex: none;
+  max-width: 100%;
+  min-width: 0;
+  width: 100% !important;
 }
 
 .shipai-sidebar .dashboard-actions .button,
