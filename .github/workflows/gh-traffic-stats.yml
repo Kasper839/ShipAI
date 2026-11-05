@@ -18,5 +18,7 @@ jobs:
     steps:
       - name: Update clone statistics
         uses: gtapps/gh-traffic-stats@v1
+        env:
+          GH_TOKEN: ${{ secrets.GH_TRAFFIC_STATS_TOKEN }}
         with:
           token: ${{ secrets.GH_TRAFFIC_STATS_TOKEN }}
