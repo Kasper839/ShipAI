@@ -1,6 +1,8 @@
 # ShipAI
 
-[![GitHub Downloads](https://img.shields.io/github/downloads/Kasper839/ShipAI/total?style=for-the-badge&color=blue)](https://github.com/Kasper839/ShipAI/releases)
+[![GitHub Downloads](https://img.shields.io/github/downloads/Kasper839/ShipAI/total?style=for-the-badge&color=blue)](https://github.com/Kasper839/ShipAI/releases) [![Git Clones](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Kasper839/ShipAI/_gh_traffic_stats/.github/badges/clones.json&style=for-the-badge)](https://github.com/Kasper839/ShipAI/graphs/traffic)
+
+The clone counter is updated daily by GitHub Actions. Configure the `GH_TRAFFIC_STATS_TOKEN` repository secret with Administration read access, then run **GitHub traffic stats** once manually.
 
 ## Private infrastructure control for Linux AI servers.
 
