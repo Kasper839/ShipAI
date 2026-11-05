@@ -1996,15 +1996,37 @@ body {
 
 .shipai-sidebar .dashboard-actions .language-control {
   display: flex;
+  align-items: center;
   flex: 0 0 auto;
+  gap: 10px;
   margin: 0;
 }
 
 .shipai-sidebar .dashboard-actions .language-control select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
   display: block;
   flex: 1 1 auto;
+  font: inherit;
   margin: 0;
+  min-width: 0;
+  outline: 0;
+  padding: 0;
   text-align: left;
+}
+
+.shipai-sidebar .dashboard-actions .language-control {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #a1a1aa;
+  cursor: pointer;
+}
+
+.shipai-sidebar .dashboard-actions .language-control:hover {
+  background: rgba(39, 39, 42, .4);
+  color: #e4e4e7;
 }
 
 /* Bottom controls are a quiet continuation of the navigation, not a separate panel. */

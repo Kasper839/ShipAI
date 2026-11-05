@@ -43,7 +43,11 @@
         </button>
       </nav>
       <div class="dashboard-actions">
-        <label class="language-control" for="language-select"><span class="sr-only" data-i18n="language">Language</span><select id="language-select" data-i18n-aria-label="language" aria-label="Language"></select></label>
+        <label class="language-control" for="language-select">
+          <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          <span class="sr-only" data-i18n="language">Language</span>
+          <select id="language-select" data-i18n-aria-label="language" aria-label="Language"></select>
+        </label>
         <button id="restart-server" class="button button-secondary" type="button" data-i18n="restart"><svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 1 4"/><path d="M20 4v7h-7"/></svg><span class="i18n-label">Restart</span></button>
         <button id="shutdown-server" class="button button-danger" type="button" data-i18n="shutdown"><svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.2 6.2a8 8 0 1 0 11.6 0"/></svg><span class="i18n-label">Shutdown</span></button>
         <button id="disconnect-button" class="button button-secondary" type="button" data-i18n="disconnect"><svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M21 3v18"/></svg><span class="i18n-label">Disconnect</span></button>
