@@ -1855,7 +1855,7 @@ body {
   border-top-color: var(--border);
   gap: 6px;
   margin-top: auto;
-  padding: 12px;
+  padding: 16px 12px 18px;
 }
 
 .shipai-sidebar .dashboard-actions .button,
@@ -2004,4 +2004,50 @@ body {
   display: block;
   flex: 1 1 auto;
   margin: 0;
+  text-align: left;
+}
+
+/* Bottom controls are a quiet continuation of the navigation, not a separate panel. */
+.shipai-sidebar .dashboard-actions {
+  border-top: 0;
+  align-items: stretch;
+  background: transparent;
+  gap: 4px;
+  justify-content: flex-start;
+}
+
+.shipai-sidebar .dashboard-actions .button,
+.shipai-sidebar .dashboard-actions .language-control,
+.shipai-sidebar .dashboard-actions .language-control select {
+  align-self: stretch;
+  border-radius: 6px;
+  box-shadow: none;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.shipai-sidebar .dashboard-actions .button-secondary,
+.shipai-sidebar .dashboard-actions .language-control select {
+  background: transparent;
+  border-color: transparent;
+  color: #a1a1aa;
+}
+
+.shipai-sidebar .dashboard-actions .button-secondary:hover:not(:disabled),
+.shipai-sidebar .dashboard-actions .language-control select:hover {
+  background: rgba(39, 39, 42, .4);
+  border-color: transparent;
+  color: #e4e4e7;
+}
+
+.shipai-sidebar .dashboard-actions .button-danger {
+  background: transparent;
+  border-color: transparent;
+  color: #a1a1aa;
+}
+
+.shipai-sidebar .dashboard-actions .button-danger:hover:not(:disabled) {
+  background: rgba(69, 10, 10, .3);
+  border-color: rgba(127, 29, 29, .5);
+  color: #f87171;
 }
