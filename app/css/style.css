@@ -390,7 +390,7 @@ body { background-image: none; }
   .capacity-strip { grid-template-columns: 1fr; }.dashboard-actions { margin-left: auto; }
 }
 
-/* Persistent workspace rail with system controls and local efficiency telemetry. */
+/* Persistent workspace rail with system controls. */
 .shipai-sidebar {
   background: #0e151b;
   border-right: 1px solid var(--border);
@@ -452,32 +452,6 @@ body { background-image: none; }
 .shipai-sidebar .dashboard-tab.is-active {
   background: rgba(46, 160, 67, .12);
   color: var(--accent);
-}
-.local-efficiency-widget {
-  border-top: 1px solid var(--border);
-  margin: auto 14px 12px;
-  padding: 12px 0;
-}
-.sidebar-section-label {
-  color: var(--subtle);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: .12em;
-  margin-bottom: 10px;
-}
-.efficiency-row {
-  align-items: baseline;
-  display: flex;
-  font-size: 10px;
-  justify-content: space-between;
-  padding: 4px 0;
-}
-.efficiency-row span { color: var(--muted); }
-.efficiency-row strong {
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
 }
 .shipai-sidebar .dashboard-actions {
   border-top: 1px solid var(--border);
@@ -1553,10 +1527,6 @@ body {
     padding-left: 10px;
     padding-right: 10px;
   }
-  .local-efficiency-widget {
-    margin-left: 10px;
-    margin-right: 10px;
-  }
 }
 
 /* Keep sidebar system controls uniform and compact. */
@@ -1779,8 +1749,7 @@ body {
   padding: 24px 12px 12px;
 }
 
-.shipai-sidebar .dashboard-tabs::before,
-.sidebar-section-label {
+.shipai-sidebar .dashboard-tabs::before {
   color: #71717a;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -1911,17 +1880,6 @@ body {
   padding: 8px 12px;
 }
 
-.efficiency-row {
-  min-height: 24px;
-  padding: 2px 8px;
-}
-
-.efficiency-row strong {
-  color: #d4d4d8;
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
 .dashboard-layout {
   margin-left: 240px;
   padding: 36px clamp(24px, 4vw, 56px) 72px;
@@ -1937,7 +1895,7 @@ body {
 .panel-header { border-bottom-color: var(--border); }
 .metric-value > span:first-child, .capacity-copy strong, .vram-stat strong,
 .service-id, .container-image, .updated-label, .model-card-meta,
-.model-performance, .deployment-log, .efficiency-row strong {
+.model-performance, .deployment-log {
   font-family: var(--font-mono);
 }
 

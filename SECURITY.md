@@ -6,7 +6,8 @@ Please use the latest released version of ShipAI to ensure you have all security
 
 | Version | Supported |
 | ------- | --------- |
-| v1.x.x  | ✅        |
+| v1.4.x  | ✅        |
+| < v1.4  | ❌        |
 
 ## Reporting a Vulnerability
 
