@@ -625,14 +625,20 @@ const getOllamaVramStatus = async (contextTokens = 4096) => {
   if (ollamaVramCache.pending) return ollamaVramCache.pending;
   ollamaVramCache.pending = Promise.allSettled([
     executeRemote(ollamaApiCommand(), { timeoutMs: 15000 }),
-    executeRemote("if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=memory.total,memory.used,memory.free --format=csv,noheader,nounits; else exit 127; fi", { timeoutMs: 10000 })
+    executeRemote("if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader,nounits; else exit 127; fi", { timeoutMs: 10000 })
   ]).then(([modelsResult, gpuResult]) => {
     const models = modelsResult.status === "fulfilled" ? parseOllamaPs(modelsResult.value) : [];
     const gpuOutput = gpuResult.status === "fulfilled" ? gpuResult.value : "";
-    const gpuRows = gpuOutput.split(/\r?\n/).map((line) => line.split(",").map((value) => Number.parseFloat(value.trim()) * 1024 ** 2))
+    const gpuRows = gpuOutput.split(/\r?\n/).map((line) => {
+      const values = line.split(",").map((value) => Number.parseFloat(value.trim()));
+      return [values[0] * 1024 ** 2, values[1] * 1024 ** 2, values[2] * 1024 ** 2, values[3]];
+    })
       .filter((row) => row.length >= 3 && row.every(Number.isFinite));
     const totalVramBytes = gpuRows.reduce((sum, row) => sum + row[0], 0);
     const usedGpuBytes = gpuRows.reduce((sum, row) => sum + row[1], 0);
+    const gpuUtilizationPercent = gpuRows.length
+      ? gpuRows.reduce((sum, row) => sum + row[3], 0) / gpuRows.length
+      : null;
     const activeVramBytes = models.reduce((sum, model) => {
       const sizeVram = Number(model.size_vram);
       return sum + (Number.isFinite(sizeVram) && sizeVram > 0 ? sizeVram : 0);
@@ -642,7 +648,7 @@ const getOllamaVramStatus = async (contextTokens = 4096) => {
       return sum + (Number.isFinite(size) && size > 0 ? size : 0);
     }, 0);
     const value = {
-      activeVramBytes, totalModelBytes, usedVramBytes: usedGpuBytes, totalVramBytes,
+      activeVramBytes, totalModelBytes, usedVramBytes: usedGpuBytes, totalVramBytes, gpuUtilizationPercent,
       freeVramBytes: Math.max(0, totalVramBytes - usedGpuBytes),
       freeableVramBytes: Math.max(0, totalVramBytes - activeVramBytes),
       estimatedContextOverheadBytes: Math.max(0, Number(contextTokens) || 0) * 1024,

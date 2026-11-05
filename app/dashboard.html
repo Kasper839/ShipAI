@@ -22,19 +22,33 @@
         <span class="context-divider" aria-hidden="true"></span>
         <span class="context-value">Remote infrastructure</span>
       </div>
+    </header>
+    <aside class="shipai-sidebar" aria-label="ShipAI workspace">
       <nav id="dashboard-tabs" class="dashboard-tabs" data-i18n-aria-label="dashboardSections" aria-label="Dashboard sections">
-        <button class="dashboard-tab is-active" type="button" data-dashboard-tab="overview" data-i18n="stats" aria-selected="true">Server statistics</button>
-        <button class="dashboard-tab" type="button" data-dashboard-tab="docker">Docker <span class="dashboard-tab-status">Coming soon</span></button>
-        <button class="dashboard-tab" type="button" data-dashboard-tab="marketplace" data-i18n="install" aria-selected="false">Install AI Models</button>
-        <button class="dashboard-tab" type="button" data-dashboard-tab="ai-chat" aria-selected="false">AI Chat</button>
+        <button class="dashboard-tab is-active" type="button" data-dashboard-tab="overview" data-i18n="stats" aria-selected="true">
+          <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span class="i18n-label">Server statistics</span>
+        </button>
+        <button class="dashboard-tab" type="button" data-dashboard-tab="docker">
+          <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          <span class="i18n-label">Docker</span><span class="dashboard-tab-status">Coming soon</span>
+        </button>
+        <button class="dashboard-tab" type="button" data-dashboard-tab="marketplace" data-i18n="install" aria-selected="false">
+          <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"/></svg>
+          <span class="i18n-label">Install AI Models</span>
+        </button>
+        <button class="dashboard-tab" type="button" data-dashboard-tab="ai-chat" aria-selected="false">
+          <svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.5 8.5 0 0 1-3-.5L4 20l1.5-4A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 11h.01M12 11h.01M16 11h.01"/></svg>
+          <span class="i18n-label">AI Chat</span>
+        </button>
       </nav>
       <div class="dashboard-actions">
         <label class="language-control" for="language-select"><span class="sr-only" data-i18n="language">Language</span><select id="language-select" data-i18n-aria-label="language" aria-label="Language"></select></label>
-        <button id="restart-server" class="button button-secondary" type="button" data-i18n="restart"><span aria-hidden="true">↻</span> Restart</button>
-        <button id="shutdown-server" class="button button-danger" type="button" data-i18n="shutdown"><span aria-hidden="true">⏻</span> Shutdown</button>
-        <button id="disconnect-button" class="button button-secondary" type="button" data-i18n="disconnect">Disconnect</button>
+        <button id="restart-server" class="button button-secondary" type="button" data-i18n="restart"><svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 1 4"/><path d="M20 4v7h-7"/></svg><span class="i18n-label">Restart</span></button>
+        <button id="shutdown-server" class="button button-danger" type="button" data-i18n="shutdown"><svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.2 6.2a8 8 0 1 0 11.6 0"/></svg><span class="i18n-label">Shutdown</span></button>
+        <button id="disconnect-button" class="button button-secondary" type="button" data-i18n="disconnect"><svg class="sidebar-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M21 3v18"/></svg><span class="i18n-label">Disconnect</span></button>
       </div>
-    </header>
+    </aside>
 
     <main class="dashboard-layout">
       <section id="connection-lost-view" class="connection-lost-view" hidden aria-labelledby="connection-lost-title">
@@ -58,7 +72,7 @@
       <div id="dashboard-error" class="error-banner" role="alert" hidden></div>
       <div class="dashboard-view" data-dashboard-view="marketplace" hidden>
         <section class="marketplace-hero">
-          <div class="marketplace-summary"><strong id="catalogue-count" data-i18n="loadingCatalogue">Loading catalogue...</strong><span data-i18n="modelsLibrary">models in the library</span><span id="installed-count" data-i18n="checkingOllama">Checking Ollama...</span></div>
+          <div class="marketplace-summary"><strong id="catalogue-count" data-i18n="loadingCatalogue">Loading catalogue...</strong><span data-i18n="modelsLibrary">models in the library</span><span id="installed-count" data-i18n="checkingOllama">Checking Ollama...</span><span id="marketplace-memory-status" class="runtime-memory-status">Memory: checking hardware...</span></div>
         </section>
         <section class="panel marketplace-panel" aria-labelledby="catalogue-title">
           <div class="custom-model-download">
@@ -153,6 +167,7 @@
           <header class="chat-studio-header">
             <div class="chat-studio-actions">
               <label class="chat-model-selector" for="chat-model-select"><span class="sr-only" data-i18n="installedModel">Installed model</span><select id="chat-model-select" data-i18n-aria-label="selectModel" aria-label="Select Installed Model"><option value="" data-i18n="loadingModels">Loading installed models...</option></select></label>
+              <span id="chat-memory-status" class="chat-memory-status" aria-live="polite">RAM / VRAM: checking</span>
               <button id="clear-chat" class="button button-secondary" data-i18n="clearConversation" type="button">Clear Conversation</button>
             </div>
           </header>

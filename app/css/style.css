@@ -390,6 +390,115 @@ body { background-image: none; }
   .capacity-strip { grid-template-columns: 1fr; }.dashboard-actions { margin-left: auto; }
 }
 
+/* Persistent workspace rail with system controls and local efficiency telemetry. */
+.shipai-sidebar {
+  background: #0e151b;
+  border-right: 1px solid var(--border);
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  left: 0;
+  position: fixed;
+  top: 72px;
+  width: 232px;
+  z-index: 4;
+}
+.shipai-sidebar .dashboard-tabs {
+  background: transparent;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 28px 14px 14px;
+  position: static;
+  width: auto;
+}
+.shipai-sidebar .dashboard-tabs::before {
+  color: var(--subtle);
+  content: "WORKSPACE";
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: .16em;
+  margin: 0 12px 10px;
+}
+.shipai-sidebar .dashboard-tab {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 10px;
+  justify-content: flex-start;
+  min-height: 36px;
+  padding: 0 12px;
+  text-align: left;
+}
+.shipai-sidebar .dashboard-tab::before {
+  color: var(--subtle);
+  content: "◈";
+  font-size: 12px;
+  width: 15px;
+}
+.shipai-sidebar .dashboard-tab:nth-of-type(2)::before { content: "▦"; }
+.shipai-sidebar .dashboard-tab:nth-of-type(3)::before { content: "✦"; }
+.shipai-sidebar .dashboard-tab:nth-of-type(4)::before { content: "◌"; }
+.shipai-sidebar .dashboard-tab:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+.shipai-sidebar .dashboard-tab.is-active {
+  background: rgba(46, 160, 67, .12);
+  color: var(--accent);
+}
+.local-efficiency-widget {
+  border-top: 1px solid var(--border);
+  margin: auto 14px 12px;
+  padding: 12px 0;
+}
+.sidebar-section-label {
+  color: var(--subtle);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: .12em;
+  margin-bottom: 10px;
+}
+.efficiency-row {
+  align-items: baseline;
+  display: flex;
+  font-size: 10px;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.efficiency-row span { color: var(--muted); }
+.efficiency-row strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+}
+.shipai-sidebar .dashboard-actions {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 14px;
+}
+.shipai-sidebar .dashboard-actions .button,
+.shipai-sidebar .language-control,
+.shipai-sidebar .language-control select {
+  box-sizing: border-box;
+  width: 100%;
+}
+.shipai-sidebar .dashboard-actions .button {
+  justify-content: flex-start;
+  min-height: 32px;
+}
+.shipai-sidebar .language-control select {
+  height: 32px;
+}
+
 /* Shared finishing pass: softer surfaces, friendlier contrast and one radius language. */
 :root {
   --page: #0d1116;
@@ -905,6 +1014,33 @@ html, body {
 .model-description {
   min-height: 42px;
 }
+.model-memory-fit,
+.runtime-memory-status,
+.chat-memory-status {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.model-memory-fit {
+  display: block;
+  line-height: 1.4;
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-memory-fit.is-full {
+  color: #56d364;
+}
+.model-memory-fit.is-slow {
+  color: #d29922;
+}
+.model-memory-fit.is-incompatible {
+  color: #f85149;
+}
+.model-memory-fit.is-unknown {
+  color: var(--muted);
+}
 .model-tag, .model-status {
   background: var(--surface-soft);
   border-radius: 3px;
@@ -1197,6 +1333,15 @@ body {
   resize: none;
   width: auto;
 }
+.chat-memory-status {
+  align-self: center;
+  margin-left: 2px;
+  white-space: nowrap;
+}
+.runtime-memory-status {
+  display: block;
+  margin-top: 4px;
+}
 .chat-composer-actions {
   align-items: flex-end;
   display: flex;
@@ -1300,7 +1445,7 @@ body {
   font-size: 11px;
   height: 34px;
   min-height: 34px;
-  padding: 0 10px;
+  padding: 8px 12px;
   white-space: nowrap;
 }
 #clear-chat:hover:not(:disabled) {
@@ -1392,6 +1537,69 @@ body {
   .chat-studio-view {
     min-height: 0;
   }
+}
+
+@media (max-width: 720px) {
+  .shipai-sidebar {
+    top: 96px;
+    width: 196px;
+  }
+  .shipai-sidebar .dashboard-tabs {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .shipai-sidebar .dashboard-actions {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .local-efficiency-widget {
+    margin-left: 10px;
+    margin-right: 10px;
+  }
+}
+
+/* Keep sidebar system controls uniform and compact. */
+.shipai-sidebar .dashboard-actions {
+  align-items: stretch;
+  gap: 8px;
+}
+.shipai-sidebar .dashboard-actions .button,
+.shipai-sidebar .dashboard-actions .language-control,
+.shipai-sidebar .dashboard-actions .language-control select {
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+  width: 100%;
+}
+.shipai-sidebar .dashboard-actions .button {
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  text-align: center;
+  transform: none;
+}
+.shipai-sidebar .dashboard-actions .button:hover:not(:disabled) {
+  transform: none;
+}
+.shipai-sidebar .dashboard-actions .button-secondary,
+.shipai-sidebar .dashboard-actions .language-control select {
+  background: #161b22;
+  border-color: #30363d;
+  color: var(--muted);
+}
+.shipai-sidebar .dashboard-actions .button-secondary:hover:not(:disabled),
+.shipai-sidebar .dashboard-actions .language-control select:hover {
+  background: #21262d;
+  border-color: #30363d;
+  color: var(--text);
+}
+.shipai-sidebar .dashboard-actions .button-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+.shipai-sidebar .dashboard-actions .button-danger:hover:not(:disabled) {
+  background: #b4232f;
+  border-color: #b4232f;
 }
 
 /* Final chat sizing: the main area owns the remaining viewport, without a bottom gap. */
@@ -1507,4 +1715,293 @@ body {
 .dashboard-layout.is-chat-studio .chat-composer-shell {
   flex: 0 0 auto;
   margin-top: auto;
+}
+
+/* ShipAI graphite workspace system. Keep this final so legacy theme layers cannot
+   reintroduce light surfaces or fixed-width sidebar controls. */
+:root {
+  --page: #09090b;
+  --surface: #0f1013;
+  --surface-raised: #18181b;
+  --surface-soft: #1c1c20;
+  --border: rgba(63, 63, 70, .62);
+  --border-strong: #3f3f46;
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  --subtle: #71717a;
+  --accent: #a3e635;
+  --accent-dark: #84cc16;
+  --success: #a3e635;
+  --success-soft: rgba(163, 230, 53, .1);
+  --danger: #f87171;
+  --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+  --font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+}
+
+body {
+  background: var(--page);
+  color: var(--text);
+}
+
+.dashboard-topbar {
+  background: rgba(9, 9, 11, .92);
+  border-bottom-color: var(--border);
+  height: 64px;
+  padding-left: 24px;
+  padding-right: 24px;
+  backdrop-filter: blur(14px);
+}
+
+.brand-mark--ship {
+  background: #d9f99d;
+  border-color: rgba(217, 249, 157, .2);
+  border-radius: 8px;
+  height: 32px;
+  width: 32px;
+}
+
+.brand-mark--ship svg { height: 22px; stroke: #18181b; width: 22px; }
+.brand-name { font-size: 16px; letter-spacing: -.03em; }
+.brand-caption { color: var(--subtle); font-size: 8px; }
+.context-kicker, .eyebrow, .section-kicker { color: var(--accent); }
+.context-value { color: var(--muted); }
+
+.shipai-sidebar {
+  background: #0c0c0f;
+  border-right-color: var(--border);
+  top: 64px;
+  width: 240px;
+}
+
+.shipai-sidebar .dashboard-tabs {
+  gap: 2px;
+  padding: 24px 12px 12px;
+}
+
+.shipai-sidebar .dashboard-tabs::before,
+.sidebar-section-label {
+  color: #71717a;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.shipai-sidebar .dashboard-tabs::before {
+  margin: 0 8px 6px;
+}
+
+.shipai-sidebar .dashboard-tab {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #a1a1aa;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  gap: 10px;
+  justify-content: flex-start;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  text-align: left;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+  width: 100%;
+}
+
+.shipai-sidebar .dashboard-tab::before { display: none; }
+.shipai-sidebar .dashboard-tab:hover {
+  background: rgba(39, 39, 42, .4);
+  border-color: transparent;
+  color: #e4e4e7;
+}
+.shipai-sidebar .dashboard-tab.is-active {
+  background: rgba(39, 39, 42, .8);
+  border-color: rgba(63, 63, 70, .5);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+  color: #f4f4f5;
+  font-weight: 500;
+}
+
+.sidebar-icon {
+  fill: none;
+  flex: 0 0 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+  width: 16px;
+}
+
+.shipai-sidebar .dashboard-tab > span:not(.dashboard-tab-status) {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-tab-status {
+  background: rgba(161, 161, 170, .1);
+  border: 1px solid var(--border);
+  color: var(--subtle);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  margin-left: auto;
+}
+
+.shipai-sidebar .dashboard-actions {
+  border-top-color: var(--border);
+  gap: 6px;
+  margin-top: auto;
+  padding: 12px;
+}
+
+.shipai-sidebar .dashboard-actions .button,
+.shipai-sidebar .dashboard-actions .language-control,
+.shipai-sidebar .dashboard-actions .language-control select {
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+}
+
+.shipai-sidebar .dashboard-actions .button {
+  gap: 10px;
+  height: 36px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.shipai-sidebar .dashboard-actions .button-danger {
+  background: transparent;
+  border-color: transparent;
+  color: #f87171;
+}
+
+.shipai-sidebar .dashboard-actions .button-danger:hover:not(:disabled) {
+  background: rgba(69, 10, 10, .3);
+  border-color: rgba(127, 29, 29, .5);
+  color: #f87171;
+}
+
+.shipai-sidebar .dashboard-actions .button-secondary,
+.shipai-sidebar .dashboard-actions .language-control select {
+  background: #18181b;
+  border-color: rgba(63, 63, 70, .8);
+  color: #a1a1aa;
+}
+
+.shipai-sidebar .dashboard-actions .button-secondary:hover:not(:disabled),
+.shipai-sidebar .dashboard-actions .language-control select:hover {
+  background: #27272a;
+  border-color: rgba(63, 63, 70, .8);
+  color: #e4e4e7;
+}
+
+.shipai-sidebar .dashboard-actions .language-control select {
+  border-radius: 6px;
+  font-size: 14px;
+  height: 36px;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.efficiency-row {
+  min-height: 24px;
+  padding: 2px 8px;
+}
+
+.efficiency-row strong {
+  color: #d4d4d8;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.dashboard-layout {
+  margin-left: 240px;
+  padding: 36px clamp(24px, 4vw, 56px) 72px;
+}
+
+.panel, .metric-card, .model-card, .chat-studio, .chart-card,
+.storage-item, .capacity-card, .command-hero, .model-progress {
+  background: #101013;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.panel-header { border-bottom-color: var(--border); }
+.metric-value > span:first-child, .capacity-copy strong, .vram-stat strong,
+.service-id, .container-image, .updated-label, .model-card-meta,
+.model-performance, .deployment-log, .efficiency-row strong {
+  font-family: var(--font-mono);
+}
+
+.button-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a2e05;
+}
+
+.button-primary:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); }
+.button-secondary { background: #18181b; border-color: var(--border); color: var(--muted); }
+.button-secondary:hover:not(:disabled) { background: #27272a; border-color: var(--border-strong); color: var(--text); }
+.progress-track { background: #27272a; }
+.progress-value { background: var(--accent); }
+.chat-empty-state, .catalogue-loading, .connection-lost-view, .feature-coming-soon {
+  background: #101013;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .dashboard-topbar { padding-left: 16px; padding-right: 16px; }
+  .shipai-sidebar { top: 96px; width: 196px; }
+  .dashboard-layout { margin-left: 196px; padding: 24px 16px 56px; }
+}
+
+/* The navigation rail and bottom controls share one exact content column. */
+.shipai-sidebar .dashboard-tabs,
+.shipai-sidebar .dashboard-actions {
+  box-sizing: border-box;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.shipai-sidebar .dashboard-tab,
+.shipai-sidebar .dashboard-actions .button,
+.shipai-sidebar .dashboard-actions .language-control,
+.shipai-sidebar .dashboard-actions .language-control select {
+  box-sizing: border-box;
+  border-radius: 6px;
+  font-size: 12px;
+  height: 36px;
+  min-height: 36px;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.shipai-sidebar .dashboard-tab,
+.shipai-sidebar .dashboard-actions .button {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.shipai-sidebar .dashboard-actions .language-control {
+  display: flex;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.shipai-sidebar .dashboard-actions .language-control select {
+  display: block;
+  flex: 1 1 auto;
+  margin: 0;
 }

@@ -38,6 +38,7 @@
   let refreshInFlight = false;
   let refreshTimer;
   let modelSyncTimer;
+  let hardwareSyncTimer;
   let dockerRepairTimer;
   let hardware = null;
   let catalogue = [];
@@ -45,11 +46,18 @@
   let installedModelsLoaded = false;
   let cachedTelemetry = null;
   let cachedVram = null;
+  let lastMemoryKey = "";
   let telemetryRequest = null;
   let vramRequest = null;
   let modelRequest = null;
   let chatModel = null;
   let chatResponse = null;
+  const efficiencyStats = {
+    outputTokens: Number.parseInt(window.localStorage.getItem("shipai-output-tokens") || "0", 10) || 0,
+    savedUsd: Number.parseFloat(window.localStorage.getItem("shipai-saved-usd") || "0") || 0
+  };
+  let generationStartedAt = 0;
+  let generationTokenCount = 0;
   const taskTabs = new Map();
   let activeDownloadModel = "";
   let activeDownloadJobId = "";
@@ -58,6 +66,37 @@
 
   const showError = (error) => { elements.error.textContent = error.message || "Unable to retrieve server telemetry."; elements.error.hidden = false; };
   const showToast = (message) => { const toast = $("dashboard-toast"); toast.textContent = message; toast.hidden = false; window.setTimeout(() => { toast.hidden = true; }, 2600); };
+  const estimateTokens = (text) => Math.max(1, Math.ceil(String(text || "").length / 4));
+  const renderEfficiency = () => {
+    const tps = generationStartedAt && generationTokenCount
+      ? generationTokenCount / Math.max(.001, (performance.now() - generationStartedAt) / 1000)
+      : 0;
+    const gpuUtilization = Number(cachedVram?.gpuUtilizationPercent);
+    const totalVram = Number(cachedVram?.totalVramBytes);
+    const usedVram = Number(cachedVram?.usedVramBytes ?? cachedVram?.activeVramBytes);
+    const gpuLoad = Number.isFinite(gpuUtilization)
+      ? `${Math.round(Math.max(0, Math.min(100, gpuUtilization)))}%`
+      : Number.isFinite(totalVram) && totalVram > 0 && Number.isFinite(usedVram)
+        ? `${Math.round(Math.min(100, usedVram / totalVram * 100))}%`
+        : "—";
+    const tpsElement = $("efficiency-tps");
+    const gpuElement = $("efficiency-gpu");
+    const tokensElement = $("efficiency-tokens");
+    const savedElement = $("efficiency-saved");
+    if (tpsElement) tpsElement.textContent = tps ? `${tps.toFixed(1)} tok/s` : "— tok/s";
+    if (gpuElement) gpuElement.textContent = gpuLoad;
+    if (tokensElement) tokensElement.textContent = efficiencyStats.outputTokens.toLocaleString();
+    if (savedElement) savedElement.textContent = `$${efficiencyStats.savedUsd.toFixed(2)}`;
+  };
+  const recordOutput = (text) => {
+    const tokens = estimateTokens(text);
+    generationTokenCount += tokens;
+    efficiencyStats.outputTokens += tokens;
+    efficiencyStats.savedUsd += tokens * 0.000002;
+    window.localStorage.setItem("shipai-output-tokens", String(efficiencyStats.outputTokens));
+    window.localStorage.setItem("shipai-saved-usd", efficiencyStats.savedUsd.toFixed(6));
+    renderEfficiency();
+  };
   const copyValue = async (value, label = "Value") => {
     if (!value) return;
     try {
@@ -230,6 +269,30 @@
     meter.style.width = `${safePercent}%`;
     detail.textContent = meta;
   };
+  const memorySnapshot = () => {
+    const totalRam = Number(hardware?.totalMemoryBytes);
+    const freeRam = Number(hardware?.availableMemoryBytes ?? hardware?.freeMemoryBytes);
+    const totalVram = Number(cachedVram?.totalVramBytes);
+    const usedVram = Number(cachedVram?.usedVramBytes ?? cachedVram?.activeVramBytes);
+    const ramGb = Number.isFinite(freeRam) ? freeRam / 1024 ** 3 : null;
+    const vramGb = Number.isFinite(totalVram) && Number.isFinite(usedVram) ? Math.max(0, totalVram - usedVram) / 1024 ** 3 : null;
+    return {
+      totalRamGb: Number.isFinite(totalRam) ? totalRam / 1024 ** 3 : null,
+      freeRamGb: ramGb,
+      totalVramGb: Number.isFinite(totalVram) ? totalVram / 1024 ** 3 : null,
+      freeVramGb: vramGb
+    };
+  };
+  const renderRuntimeMemory = () => {
+    const memory = memorySnapshot();
+    const format = (value) => value === null ? "—" : `${value.toFixed(1)} GB`;
+    const text = `RAM ${format(memory.freeRamGb)} free · VRAM ${format(memory.freeVramGb)} free`;
+    const marketplace = $("marketplace-memory-status");
+    const chat = $("chat-memory-status");
+    if (marketplace) marketplace.textContent = text;
+    if (chat) chat.textContent = text;
+    return `${memory.freeRamGb}|${memory.freeVramGb}`;
+  };
   const renderVram = (status) => {
     if (!status) return;
     const active = Number(status.activeVramBytes);
@@ -258,6 +321,12 @@
     vramRequest = window.api.getOllamaVramStatus(4096).then((status) => {
       cachedVram = status;
       renderVram(status);
+      renderEfficiency();
+      const memoryKey = renderRuntimeMemory();
+      if (catalogue.length && memoryKey !== lastMemoryKey) {
+        lastMemoryKey = memoryKey;
+        renderCatalogue();
+      }
       return status;
     }).catch((error) => {
       elements.vramActive.textContent = "N/A";
@@ -272,14 +341,17 @@
   const modelInstalled = (model) => installedModels.find((installed) => installed.name.toLowerCase() === model.ollama.toLowerCase() || installed.name.toLowerCase().startsWith(`${model.ollama.toLowerCase()}:`));
   const specGb = (value) => Number.parseFloat(String(value).replace(",", "."));
   const compatibility = (model) => {
-    if (!hardware || !Number.isFinite(hardware.totalMemoryBytes)) return { state: "unknown", label: "CHECKING HARDWARE", reason: "Hardware telemetry is still being collected." };
-    const ram = hardware.totalMemoryBytes / 1024 ** 3;
-    const vram = (hardware.totalVramBytes || 0) / 1024 ** 3;
+    const memory = memorySnapshot();
+    if (memory.freeRamGb === null) return { state: "unknown", label: "CHECKING HARDWARE", reason: "Hardware telemetry is still being collected.", memory: "RAM / VRAM pending" };
     const minRam = specGb(model.minimum.ram); const minVram = specGb(model.minimum.vram);
     const recommendedRam = specGb(model.recommended.ram); const recommendedVram = specGb(model.recommended.vram);
-    if (ram < minRam || (minVram > 0 && vram < minVram)) return { state: "incompatible", label: "INCOMPATIBLE / UNSUPPORTED", reason: `Requires ${model.minimum.ram} RAM${minVram ? ` and ${model.minimum.vram} VRAM` : ""}; server has ${ram.toFixed(1)}GB RAM${hardware.gpuAvailable ? ` and ${vram.toFixed(1)}GB VRAM` : " and no detected VRAM"}.` };
-    if (ram >= recommendedRam && (!recommendedVram || vram >= recommendedVram)) return { state: "full", label: "FULLY COMPATIBLE", reason: "Server meets the recommended inference profile." };
-    return { state: "slow", label: "RUNS WITH QUANTIZATION / SLOW", reason: `Meets minimum sizing (${model.minimum.ram} RAM / ${model.minimum.vram} VRAM), but recommended capacity is ${model.recommended.ram} RAM / ${model.recommended.vram} VRAM.` };
+    const hasVram = minVram > 0 || recommendedVram > 0;
+    const enoughMinimum = memory.freeRamGb >= minRam && (!hasVram || (memory.freeVramGb !== null && memory.freeVramGb >= minVram));
+    const enoughRecommended = memory.freeRamGb >= recommendedRam && (!recommendedVram || (memory.freeVramGb !== null && memory.freeVramGb >= recommendedVram));
+    const memoryText = `free RAM ${memory.freeRamGb.toFixed(1)} GB${memory.freeVramGb === null ? "" : ` · free VRAM ${memory.freeVramGb.toFixed(1)} GB`}`;
+    if (!enoughMinimum) return { state: "incompatible", label: "INSUFFICIENT MEMORY", reason: `Needs at least ${model.minimum.ram} RAM${minVram ? ` / ${model.minimum.vram} VRAM` : ""}; ${memoryText}.`, memory: memoryText };
+    if (enoughRecommended) return { state: "full", label: "FITS CURRENTLY", reason: `Recommended profile fits available memory; ${memoryText}.`, memory: memoryText };
+    return { state: "slow", label: "MINIMUM FIT / SLOW", reason: `Minimum fits, but recommended capacity may use system RAM or swap; ${memoryText}.`, memory: memoryText };
   };
   const openModelDetails = (model) => {
     const existing = $("model-modal"); if (existing) existing.remove();
@@ -343,9 +415,9 @@
     const root = $("model-catalogue"); root.replaceChildren();
     const groups = [...new Set(visible.map((model) => model.category))];
     groups.forEach((group) => { const section = document.createElement("section"); section.className = "model-group"; section.innerHTML = `<div class="model-group-heading"><h3>${group}</h3><span>${visible.filter((model) => model.category === group).length} engines</span></div><div class="model-grid"></div>`; const grid = section.querySelector(".model-grid");
-      visible.filter((model) => model.category === group).forEach((model) => { const installed = modelInstalled(model); const fit = compatibility(model); const card = document.createElement("article"); card.className = "model-card"; card.dataset.modelId = model.id; card.innerHTML = `<button class="model-card-main" type="button"><span class="model-card-top"><span class="model-category">${model.category}</span><span class="model-status ${installed ? "is-installed" : ""}">${installed ? "Installed" : "Available"}</span></span><h4></h4><p class="model-description"></p><span class="model-card-meta"></span><span class="model-digest"></span><span class="model-tags"></span><span class="model-performance" title=""></span></button><div class="model-card-actions"><button class="button button-small button-secondary model-run" type="button">Try / Run</button><button class="button button-small button-secondary model-smoke" type="button">Smoke test</button><button class="button button-small button-primary model-download" type="button">Download</button><button class="button button-small button-secondary model-remove" type="button">Remove</button></div>`;
+      visible.filter((model) => model.category === group).forEach((model) => { const installed = modelInstalled(model); const fit = compatibility(model); const card = document.createElement("article"); card.className = "model-card"; card.dataset.modelId = model.id; card.innerHTML = `<button class="model-card-main" type="button"><span class="model-card-top"><span class="model-category">${model.category}</span><span class="model-status ${installed ? "is-installed" : ""}">${installed ? "Installed" : "Available"}</span></span><h4></h4><p class="model-description"></p><span class="model-card-meta"></span><span class="model-digest"></span><span class="model-tags"></span><span class="model-performance" title=""></span><span class="model-memory-fit is-unknown"></span></button><div class="model-card-actions"><button class="button button-small button-secondary model-run" type="button">Try / Run</button><button class="button button-small button-secondary model-smoke" type="button">Smoke test</button><button class="button button-small button-primary model-download" type="button">Download</button><button class="button button-small button-secondary model-remove" type="button">Remove</button></div>`;
         card.querySelector("h4").textContent = model.name; card.querySelector(".model-description").textContent = model.description; card.querySelector(".model-card-meta").textContent = `${model.architecture} · ${model.context}`; if (installed?.digest) makeCopyable(card.querySelector(".model-digest"), installed.digest, "Model hash"); card.querySelector(".model-tags").innerHTML = model.capabilities.slice(0, 3).map((item) => `<span class="model-tag">${item}</span>`).join("");
-        const performance = card.querySelector(".model-performance"); performance.textContent = model.vram || `~${model.minimum?.vram || "N/A"} VRAM`; performance.title = fit.reason; const run = card.querySelector(".model-run"); const smoke = card.querySelector(".model-smoke"); const download = card.querySelector(".model-download"); const remove = card.querySelector(".model-remove");
+        const performance = card.querySelector(".model-performance"); performance.textContent = model.vram || `~${model.minimum?.vram || "N/A"} VRAM`; performance.title = fit.reason; const memoryFit = card.querySelector(".model-memory-fit"); memoryFit.textContent = fit.memory || "Memory data pending"; memoryFit.title = fit.reason; memoryFit.className = `model-memory-fit is-${fit.state}`; const run = card.querySelector(".model-run"); const smoke = card.querySelector(".model-smoke"); const download = card.querySelector(".model-download"); const remove = card.querySelector(".model-remove");
         card.querySelector(".model-status").textContent = installed ? t("installed", "Installed") : t("available", "Available");
         run.textContent = t("tryRun", "Try / Run"); download.textContent = t("download", "Download"); remove.textContent = t("remove", "Remove");
         download.disabled = Boolean(installed); remove.disabled = !installed; smoke.disabled = !installed; run.addEventListener("click", () => runModel(model, run)); smoke.addEventListener("click", () => smokeTestModel(model, smoke)); download.addEventListener("click", () => deployModel(model, download)); remove.addEventListener("click", () => removeModel(model, remove)); card.querySelector(".model-card-main").addEventListener("click", () => openModelDetails(model)); grid.append(card);
@@ -365,7 +437,7 @@
     catch (error) { showError(error); $("model-catalogue").textContent = "Unable to load model catalogue."; }
   };
 
-  const updateHardwareStatus = async () => { try { hardware = await window.api.checkHardware(); if (catalogue.length) renderCatalogue(); } catch (error) { hardware = null; showError(error); } };
+  const updateHardwareStatus = async () => { try { hardware = await window.api.checkHardware(); const memoryKey = renderRuntimeMemory(); if (catalogue.length && memoryKey !== lastMemoryKey) { lastMemoryKey = memoryKey; renderCatalogue(); } } catch (error) { hardware = null; renderRuntimeMemory(); showError(error); } };
   const appendDeploymentLog = (entry) => { const log = $("deployment-log"); log.hidden = false; log.textContent += `${entry.data}\n`; log.scrollTop = log.scrollHeight; };
   const updateModelProgress = (payload) => {
     const panel = $("model-progress");
@@ -469,7 +541,7 @@
     });
     window.api.onChatChunk((payload) => {
       if (payload.requestId !== chatResponse?.requestId || chatResponse.cancelled) return;
-      if (payload.type === "token") chatResponse.querySelector(".chat-markdown").insertAdjacentHTML("beforeend", markdownToHtml(payload.data, true));
+      if (payload.type === "token") { chatResponse.querySelector(".chat-markdown").insertAdjacentHTML("beforeend", markdownToHtml(payload.data, true)); recordOutput(payload.data); }
       if (payload.type === "error") chatResponse.querySelector(".chat-markdown").insertAdjacentHTML("beforeend", `<p class="chat-error">${escapeHtml(payload.data)}</p>`);
       if (payload.type === "done" || payload.type === "error") { chatResponse.streaming = false; bindCopyButtons(chatResponse); $("chat-stop").hidden = true; $("chat-send").disabled = !chatModel; }
       $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
@@ -482,6 +554,7 @@
       const messages = $("chat-messages");
       const user = document.createElement("article"); user.className = "chat-message chat-message--user"; user.textContent = prompt; messages.append(user);
       chatResponse = document.createElement("article"); chatResponse.className = "chat-message chat-message--assistant"; chatResponse.requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; chatResponse.streaming = true; chatResponse.cancelled = false; chatResponse.innerHTML = '<div class="chat-markdown"></div>'; messages.append(chatResponse);
+      generationStartedAt = performance.now(); generationTokenCount = 0; renderEfficiency();
       input.value = ""; input.style.height = "auto"; $("chat-send").disabled = true; $("chat-stop").hidden = false;
       try { await window.api.sendChatPrompt(chatModel, prompt, chatResponse.requestId); }
       catch (error) { if (!chatResponse.cancelled) chatResponse.querySelector(".chat-markdown").innerHTML = `<p class="chat-error">${escapeHtml(error.message)}</p>`; }
@@ -525,6 +598,6 @@
     }
     updateModelProgress({ ...data, state: data.status === "success" ? "complete" : "downloading" });
   };
-  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { const wasCancelled = cancelledDownloadJobs.has(payload.jobId); if (!wasCancelled) updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete" || payload.state === "error" || payload.state === "cancelled") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (payload.jobId === activeDownloadJobId) activeDownloadJobId = ""; if ((payload.state === "error" || payload.state === "cancelled") && task) taskTabs.delete(task.taskId); if (task && payload.state === "complete" && !wasCancelled) openTaskChat(task); if (payload.state === "error" && !wasCancelled && payload.message !== "Model download cancelled.") showError(new Error(payload.message || "Model download failed.")); if (payload.state === "complete" && !wasCancelled) void refreshInstalledModels(); if (wasCancelled) cancelledDownloadJobs.delete(payload.jobId); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); window.clearInterval(modelSyncTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); elements.cancelDownload?.addEventListener("click", async () => { const cancelledJobId = activeDownloadJobId; if (!cancelledJobId) return; cancelledDownloadJobs.add(cancelledJobId); const cancelledModel = activeDownloadModel; activeDownloadJobId = ""; const panel = $("model-progress"); panel.hidden = true; panel.dataset.active = "false"; elements.cancelDownload.hidden = true; elements.cancelDownload.disabled = true; const task = [...taskTabs.values()].find((item) => item.jobId === cancelledJobId); if (task) taskTabs.delete(task.taskId); try { await window.api.cancelOllamaPull(cancelledJobId); } catch { } showToast(`${cancelledModel || "Model"} download cancelled.`);   }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); updateHardwareStatus(); void refresh(); void refreshInstalledModels(); refreshTimer = window.setInterval(refresh, 3000); modelSyncTimer = window.setInterval(() => { void refreshInstalledModels(); }, 10000);
+  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { const wasCancelled = cancelledDownloadJobs.has(payload.jobId); if (!wasCancelled) updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete" || payload.state === "error" || payload.state === "cancelled") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (payload.jobId === activeDownloadJobId) activeDownloadJobId = ""; if ((payload.state === "error" || payload.state === "cancelled") && task) taskTabs.delete(task.taskId); if (task && payload.state === "complete" && !wasCancelled) openTaskChat(task); if (payload.state === "error" && !wasCancelled && payload.message !== "Model download cancelled.") showError(new Error(payload.message || "Model download failed.")); if (payload.state === "complete" && !wasCancelled) void refreshInstalledModels(); if (wasCancelled) cancelledDownloadJobs.delete(payload.jobId); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); window.clearInterval(modelSyncTimer); window.clearInterval(hardwareSyncTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); elements.cancelDownload?.addEventListener("click", async () => { const cancelledJobId = activeDownloadJobId; if (!cancelledJobId) return; cancelledDownloadJobs.add(cancelledJobId); const cancelledModel = activeDownloadModel; activeDownloadJobId = ""; const panel = $("model-progress"); panel.hidden = true; panel.dataset.active = "false"; elements.cancelDownload.hidden = true; elements.cancelDownload.disabled = true; const task = [...taskTabs.values()].find((item) => item.jobId === cancelledJobId); if (task) taskTabs.delete(task.taskId); try { await window.api.cancelOllamaPull(cancelledJobId); } catch { } showToast(`${cancelledModel || "Model"} download cancelled.`);   }); setDashboardTab("overview"); initializeChat(); renderEfficiency(); loadCatalogue(); void updateHardwareStatus(); void refresh(); void refreshInstalledModels(); refreshTimer = window.setInterval(refresh, 3000); modelSyncTimer = window.setInterval(() => { void refreshInstalledModels(); }, 10000); hardwareSyncTimer = window.setInterval(() => { void updateHardwareStatus(); }, 10000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); window.clearInterval(modelSyncTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();

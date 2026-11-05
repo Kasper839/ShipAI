@@ -82,7 +82,10 @@
   const apply = () => {
     const language = localStorage.getItem("shipai-language") || "en";
     document.documentElement.lang = language;
-    document.querySelectorAll("[data-i18n]").forEach((element) => { element.textContent = translate(element.dataset.i18n); });
+    document.querySelectorAll("[data-i18n]").forEach((element) => {
+      const label = element.querySelector(".i18n-label");
+      (label || element).textContent = translate(element.dataset.i18n);
+    });
     document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => { element.placeholder = translate(element.dataset.i18nPlaceholder); });
     document.querySelectorAll("[data-i18n-title]").forEach((element) => { element.title = translate(element.dataset.i18nTitle); });
     document.querySelectorAll("[data-i18n-aria-label]").forEach((element) => { element.setAttribute("aria-label", translate(element.dataset.i18nAriaLabel)); });
