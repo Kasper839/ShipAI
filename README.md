@@ -2,7 +2,7 @@
 
 [![GitHub Downloads](https://img.shields.io/github/downloads/Kasper839/ShipAI/total?style=for-the-badge&color=blue)](https://github.com/Kasper839/ShipAI/releases)
 
-## Private infrastructure control for Linux AI servers
+## Private infrastructure control for Linux AI servers.
 
 **ShipAI is a private-by-design Electron desktop control plane for remote Linux server management, Docker telemetry, and hardware-aware Ollama model deployment over SSH.** Connect to a host, understand its live capacity, operate its AI infrastructure, and deploy a model that fits—without sending your infrastructure or prompts through a hosted control plane.
 
@@ -63,7 +63,7 @@ Running a private AI server often means switching between SSH terminals, Docker 
 
 - Confirmed remote restart and shutdown actions
 - Uses the active sudo session and reports command failures explicitly
-
+.
 ### 🔒 Zero-cloud privacy
 
 - Direct SSH connection from the desktop to the target host
@@ -213,7 +213,7 @@ The packaged artifacts are written to `dist/`. The build configuration targets a
 
 ### Saved profile storage
 
-ShipAI stores profiles in `profiles.json` under Electron’s per-user application data directory. The persisted structure is:
+ShipAI stores profiles in `profiles.json` under Electron’s per-user application data directory. The persisted structure is:.
 
 ```json
 {
