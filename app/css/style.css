@@ -80,7 +80,7 @@ h1 { font-size: clamp(26px, 4vw, 32px); letter-spacing: -.035em; line-height: 1.
 .ai-controls { margin-top: 16px; }
 .launcher-select { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 7px; color: var(--text); height: 38px; min-width: 220px; padding: 0 10px; }
 .status-badge--neutral { background: #f1f5f9; color: var(--muted); }
-.deployment-log { display: none !important; }
+.deployment-log[hidden] { display: none; }
 .model-progress { background: #161b22; border: 1px solid #30363d; border-radius: 10px; box-shadow: 0 16px 36px rgba(2, 6, 23, .24); color: #f8fafc; margin: 0 0 24px; overflow: hidden; padding: 18px 20px 16px; }
 .model-progress-heading { align-items: center; display: flex; font-size: 14px; justify-content: space-between; line-height: 1.3; }
 .model-progress-heading strong:last-child { color: #a5b4fc; font-variant-numeric: tabular-nums; }
@@ -860,7 +860,7 @@ body {
 
 /* No-AI-vibe contract: remove legacy decoration and keep technical data dense. */
 *, *::before, *::after {
-  box-shadow: none !important;
+  box-shadow: none;
 }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 1px solid var(--accent);
@@ -869,7 +869,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .topbar, .command-hero, .panel, .metric-card, .model-card, .chat-studio,
 .launcher-card, .ai-launcher, .chart-card, .storage-item, .capacity-card,
 .modal-card, .auth-card, .model-progress {
-  background-image: none !important;
+  background-image: none;
 }
 .command-hero, .panel, .metric-card, .model-card, .chat-studio,
 .launcher-card, .ai-launcher, .chart-card, .storage-item, .capacity-card,
@@ -2051,7 +2051,7 @@ body {
   flex: none;
   max-width: 100%;
   min-width: 0;
-  width: 100% !important;
+  width: 100%;
 }
 
 .shipai-sidebar .dashboard-actions .button,

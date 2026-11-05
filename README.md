@@ -18,7 +18,15 @@ Running a private AI server often means switching between SSH terminals, Docker 
 
 ## Key features
 
-### 🚀 v1.3.0 highlights
+### 🚀 v1.4.0 highlights
+
+- Reworked the dashboard into a compact graphite and zinc developer-tool workspace
+- Unified sidebar navigation and bottom controls with full-width alignment, consistent sizing, and keyboard-friendly focus states
+- Added a clean sidebar language control with matching iconography and quiet hover states
+- Removed the legacy telemetry rail from the sidebar to keep navigation focused
+- Preserved live server telemetry, model compatibility checks, Ollama chat, and remote power controls
+
+### v1.3.0 highlights
 
 - Sleek real-time Ollama model download card with percentage, speed, transferred size, and progress bar
 - Cancel active model downloads without leaving a partial download state in the dashboard
@@ -213,7 +221,7 @@ The packaged artifacts are written to `dist/`. The build configuration targets a
 
 ### Saved profile storage
 
-ShipAI stores profiles in `profiles.json` under Electron’s per-user application data directory. The persisted structure is:.
+ShipAI stores profiles in `profiles.json` under Electron’s per-user application data directory. The persisted structure is:
 
 ```json
 {
