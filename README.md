@@ -20,7 +20,7 @@ Running a private AI server often means switching between SSH terminals, Docker 
 
 ## Key features
 
-### 🚀 v1.4.0 highlights
+### 🚀 v1.4.0 highlights.
 
 - Reworked the dashboard into a compact graphite and zinc developer-tool workspace
 - Unified sidebar navigation and bottom controls with full-width alignment, consistent sizing, and keyboard-friendly focus states
