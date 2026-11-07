@@ -57,5 +57,9 @@ contextBridge.exposeInMainWorld("api", Object.freeze({
   },
   restartContainer: (name) => ipcRenderer.invoke("ssh:restart-container", name),
   dockerAction: (action, name) => ipcRenderer.invoke("ssh:docker-action", { action, name }),
+  launchDockerPreset: (preset) => ipcRenderer.invoke("ssh:docker-launch-preset", preset),
+  createDockerContainer: (configuration) => ipcRenderer.invoke("ssh:docker-create", configuration),
+  updateDockerContainer: (configuration) => ipcRenderer.invoke("ssh:docker-update", configuration),
+  reconnect: () => ipcRenderer.invoke("ssh:reconnect"),
   disconnect: () => ipcRenderer.invoke("ssh:disconnect")
 }));

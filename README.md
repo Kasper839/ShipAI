@@ -28,6 +28,16 @@ Running a private AI server often means switching between SSH terminals, Docker 
 - Removed the legacy telemetry rail from the sidebar to keep navigation focused
 - Preserved live server telemetry, model compatibility checks, Ollama chat, and remote power controls
 
+### 🚀 v1.5.0 highlights
+
+- Added interactive Docker container cards with running/stopped state indicators and Start, Stop, Restart, and Logs actions
+- Replaced Docker create/edit forms with one-click Ollama Local, PostgreSQL, and Redis template cards
+- Docker operations use bounded daemon probes and fallback command attempts; failures return actionable status without freezing the renderer
+- Preset launches use fixed, validated configurations and reuse `main/docker-init.sh` when the daemon is unavailable
+- Preset launches retry with alternate host ports after an explicit bind conflict and remove only a matching stopped container when its name is already taken
+- Added automatic SSH reconnect with a quiet in-dashboard retry state instead of freezing the workspace
+- Added consistent press feedback and full-width sidebar controls
+
 ### v1.3.0 highlights
 
 - Sleek real-time Ollama model download card with percentage, speed, transferred size, and progress bar
@@ -64,8 +74,7 @@ Running a private AI server often means switching between SSH terminals, Docker 
 
 ### 🐳 Docker and Ollama management
 
-- Docker management UI is currently marked as coming soon while the experience is being prepared
-- Existing Docker initialization and management code remains in the backend for a future release
+- Docker management UI provides container telemetry and direct lifecycle controls
 - Install or detect Ollama on the host
 - Pull models, monitor progress, cancel downloads, and start the Ollama service remotely
 

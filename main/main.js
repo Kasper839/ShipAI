@@ -16,6 +16,10 @@ let sshConnection = null;
 const sshManager = new SshManager(() => sshClient);
 let remoteStatusCache = { expiresAt: 0, value: null, pending: null };
 let dockerRepairPending = null;
+let lastCredentials = null;
+let reconnectTimer = null;
+let reconnectAttempt = 0;
+let intentionalDisconnect = false;
 const activeModelDownloads = new Map();
 const cancelledModelDownloads = new Set();
 let telemetryClient = null;
@@ -106,6 +110,10 @@ const connectionError = (error) => {
 };
 
 const closeSshConnection = () => {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   if (sshClient) {
     sshClient.end();
     sshClient = null;
@@ -113,6 +121,29 @@ const closeSshConnection = () => {
   sshConnection = null;
   sshManager.clearSession();
   remoteStatusCache = { expiresAt: 0, value: null, pending: null };
+};
+
+const scheduleReconnect = () => {
+  if (intentionalDisconnect || !lastCredentials || reconnectTimer) return;
+  reconnectAttempt += 1;
+  const delay = Math.min(30000, 1000 * (2 ** Math.min(reconnectAttempt - 1, 5)));
+  sendToRenderer("ssh:connection-state", {
+    state: "reconnecting",
+    attempt: reconnectAttempt,
+    delay,
+    reason: "Connection lost. Retrying automatically."
+  });
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null;
+    try {
+      await connectSsh(lastCredentials, { preserveReconnectState: true });
+      reconnectAttempt = 0;
+      sendToRenderer("ssh:connection-state", { state: "connected", reason: "Connection restored." });
+    } catch (error) {
+      console.warn("[SSH] automatic reconnect failed:", error.message);
+      scheduleReconnect();
+    }
+  }, delay);
 };
 
 const executeRemoteResult = (command, options = {}) => sshManager.execute(command, {
@@ -177,12 +208,17 @@ const initializeEnvironment = async () => {
   return environmentStatus;
 };
 
-const connectSsh = (credentials) => new Promise((resolve, reject) => {
+const connectSsh = (credentials, options = {}) => new Promise((resolve, reject) => {
   console.log("[SSH] connecting", {
     host: credentials.host,
     port: credentials.port,
     username: credentials.username
   });
+  intentionalDisconnect = false;
+  if (!options.preserveReconnectState) {
+    lastCredentials = { ...credentials };
+    reconnectAttempt = 0;
+  }
   closeSshConnection();
   environmentStatus = {
     initialized: false,
@@ -279,6 +315,7 @@ const connectSsh = (credentials) => new Promise((resolve, reject) => {
       sshManager.clearSession();
       remoteStatusCache = { expiresAt: 0, value: null, pending: null };
       sendToRenderer("ssh:connection-state", { state: "disconnected", reason: "The SSH connection was closed by the server or network." });
+      scheduleReconnect();
     }
   });
   timeoutId = setTimeout(() => fail(new Error("SSH connection timed out after 10 seconds.")), 10000);
@@ -431,7 +468,7 @@ const getRemoteStatus = async () => {
   if (remoteStatusCache.value && remoteStatusCache.expiresAt > Date.now()) return remoteStatusCache.value;
   if (remoteStatusCache.pending) return remoteStatusCache.pending;
   remoteStatusCache.pending = executeRemoteResult(
-    "printf '__DOCKER__\\n'; if command -v docker >/dev/null 2>&1; then docker_command=docker; docker info >/dev/null 2>&1 || docker_command='sudo -n docker'; $docker_command ps -a --format '{{json .}}' 2>/dev/null || printf '__DOCKER_UNAVAILABLE__\\n'; else printf '__DOCKER_MISSING__\\n'; fi; printf '\\n__OLLAMA__\\n'; if command -v curl >/dev/null 2>&1; then curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags 2>/dev/null || printf '{\"models\":[]}\\n'; else printf '{\"models\":[]}\\n'; fi",
+    "printf '__DOCKER__\\n'; if command -v docker >/dev/null 2>&1; then docker_command=docker; docker info >/dev/null 2>&1 || docker_command='sudo -n docker'; $docker_command ps -a --format '{{json .}}' 2>/dev/null || printf '__DOCKER_UNAVAILABLE__\\n'; else printf '__DOCKER_MISSING__\\n'; fi; printf '\\n__OLLAMA__\\n'; if command -v curl >/dev/null 2>&1; then curl -fsS --max-time 3 http://127.0.0.1:11434/api/tags 2>/dev/null || printf '__OLLAMA_UNAVAILABLE__\\n'; else printf '__OLLAMA_UNAVAILABLE__\\n'; fi",
     { timeoutMs: 15000 }
   ).then((result) => {
     const sections = result.stdout.split(/__(DOCKER|OLLAMA)__\r?\n/);
@@ -448,7 +485,11 @@ const getRemoteStatus = async () => {
           ? "Docker is not installed."
           : dockerOutput.includes("__DOCKER_UNAVAILABLE__") ? "Docker is starting or requires elevated access." : null
       },
-      ollama: { models: parseOllamaModels(section("OLLAMA")) }
+      ollama: {
+        models: parseOllamaModels(section("OLLAMA")),
+        available: !section("OLLAMA").includes("__OLLAMA_UNAVAILABLE__"),
+        error: section("OLLAMA").includes("__OLLAMA_UNAVAILABLE__") ? "Ollama is unavailable." : null
+      }
     };
 
     remoteStatusCache = { expiresAt: Date.now() + 2500, value, pending: null };
@@ -603,6 +644,121 @@ const deploymentImage = (value) => typeof value === "string" && /^[a-zA-Z0-9][a-
 const deploymentModel = (value) => typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9_.\/:@-]{0,127}$/.test(value);
 const aiInfrastructureImage = (value) => typeof value === "string" && /^(ollama\/|qdrant\/|chromadb\/|milvusdb\/|vllm\/|ghcr\.io\/.*(ollama|llm|vector)|nvidia\/).*$/i.test(value);
 const shellQuote = (value) => `'${String(value).replaceAll("'", "'\\''")}'`;
+const dockerPort = (value) => {
+  if (typeof value !== "string" || !/^\d{1,5}:\d{1,5}(?:\/(?:tcp|udp))?$/.test(value)) return false;
+  const [host, container] = value.split(":");
+  return Number.parseInt(host, 10) <= 65535 && Number.parseInt(container, 10) <= 65535;
+};
+const dockerEnvironmentKey = (value) => typeof value === "string" && /^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(value);
+const normalizedDockerConfig = (configuration) => {
+  if (!configuration || typeof configuration !== "object" || !deploymentName(configuration.name) || !deploymentImage(configuration.image)) {
+    throw new Error("A valid container name and image are required.");
+  }
+  const ports = Array.isArray(configuration.ports) ? configuration.ports.map(String) : [];
+  if (ports.length > 32 || ports.some((port) => !dockerPort(port))) throw new Error("Ports must use host:container[/tcp|udp] format.");
+  const environment = configuration.environment && typeof configuration.environment === "object" ? configuration.environment : {};
+  const entries = Object.entries(environment);
+  if (entries.length > 64 || entries.some(([key, value]) => !dockerEnvironmentKey(key) || typeof value !== "string" || value.length > 4096)) {
+    throw new Error("Environment variables contain an invalid key or value.");
+  }
+  return {
+    name: configuration.name,
+    image: configuration.image,
+    ports,
+    environment: Object.fromEntries(entries)
+  };
+};
+const dockerArguments = (configuration, includeInit = false) => {
+  const config = normalizedDockerConfig(configuration);
+  const portArgs = config.ports.map((port) => `-p ${shellQuote(port)}`).join(" ");
+  const environmentArgs = Object.entries(config.environment)
+    .map(([key, value]) => `-e ${shellQuote(`${key}=${value}`)}`).join(" ");
+  return `run -d ${includeInit ? "--init " : ""}--name ${shellQuote(config.name)} ${portArgs} ${environmentArgs} ${shellQuote(config.image)}`.replace(/\s+/g, " ").trim();
+};
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const executeDockerAttempts = async (commands, timeoutMs = 30000) => {
+  const attempts = [];
+  let environmentChecked = false;
+  for (let index = 0; index < commands.length; index += 1) {
+    const command = commands[index];
+    try {
+      try {
+        await executeRemote("docker info >/dev/null 2>&1 || sudo -n docker info >/dev/null 2>&1", { timeoutMs: 10000 });
+      } catch (probeError) {
+        if (environmentChecked) throw probeError;
+        environmentChecked = true;
+        const initialized = await ensureDocker();
+        if (!initialized || !["ready", "ready-sudo"].includes(initialized.state)) throw probeError;
+      }
+      const output = await executeRemote(command, { timeoutMs });
+      return { success: true, attempt: index + 1, attempts, output };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      attempts.push({ attempt: index + 1, error: message });
+      if (index < commands.length - 1) await wait(500 * (index + 1));
+    }
+  }
+  return { success: false, error: attempts.at(-1)?.error || "Docker command failed.", attempts };
+};
+const hasPortConflict = (result) => /port is already allocated|address already in use|bind for .* failed/i.test(
+  (result?.attempts || []).map((attempt) => attempt.error).join("\n")
+);
+const offsetDockerPorts = (configuration, offset) => ({
+  ...configuration,
+  ports: configuration.ports.map((port) => {
+    const [host, containerAndProtocol] = port.split(":");
+    const protocol = containerAndProtocol.match(/\/(?:tcp|udp)$/)?.[0] || "";
+    const container = containerAndProtocol.replace(/\/(?:tcp|udp)$/, "");
+    return `${Number.parseInt(host, 10) + offset}:${container}${protocol}`;
+  })
+});
+const dockerPresets = Object.freeze({
+  ollama: { name: "ollama", image: "ollama/ollama:latest", ports: ["11434:11434"], environment: {} },
+  postgres: { name: "postgres", image: "postgres:16-alpine", ports: ["5432:5432"], environment: { POSTGRES_USER: "shipai", POSTGRES_PASSWORD: "change-me", POSTGRES_DB: "shipai" } },
+  redis: { name: "redis", image: "redis:7-alpine", ports: ["6379:6379"], environment: {} }
+});
+const removeStoppedContainer = async (name) => {
+  try {
+    const state = (await executeRemote(dockerCommand(`inspect --format '{{.State.Running}}' ${shellQuote(name)}`), { timeoutMs: 10000 })).trim();
+    if (state !== "false") return false;
+    const result = await executeDockerAttempts([
+      dockerCommand(`rm ${shellQuote(name)}`),
+      `sudo -n docker rm ${shellQuote(name)}`
+    ]);
+    return result.success;
+  } catch {
+    return false;
+  }
+};
+const createDockerContainer = async (configuration, cleanStopped = false) => {
+  let config;
+  try {
+    config = normalizedDockerConfig(configuration);
+  } catch (error) {
+    return { success: false, error: error.message, attempts: [] };
+  }
+  const command = dockerArguments(config);
+  const fallback = dockerArguments(config, true);
+  let result = await executeDockerAttempts([dockerCommand(command), dockerCommand(fallback), `sudo -n docker ${fallback}`], 60000);
+  let usedConfiguration = config;
+  if (!result.success && cleanStopped && /already exists|conflict.*name/i.test(result.error || "")) {
+    await removeStoppedContainer(config.name);
+    result = await executeDockerAttempts([dockerCommand(fallback), `sudo -n docker ${fallback}`], 60000);
+  }
+  if (!result.success && config.ports.length && hasPortConflict(result)) {
+    for (const offset of [1, 2, 3]) {
+      const alternative = offsetDockerPorts(config, offset);
+      const alternativeCommand = dockerArguments(alternative, true);
+      result = await executeDockerAttempts([dockerCommand(alternativeCommand), `sudo -n docker ${alternativeCommand}`], 60000);
+      if (result.success) {
+        usedConfiguration = alternative;
+        break;
+      }
+    }
+  }
+  if (result.success) remoteStatusCache.expiresAt = 0;
+  return { ...result, name: config.name, usedPorts: usedConfiguration.ports };
+};
 const ollamaApiCommand = (method = "GET", body = "", path = "ps") => {
   const bodyArgument = body ? ` -H 'Content-Type: application/json' --data ${shellQuote(body)}` : "";
   return `curl -fsS --max-time 1800 -X ${method} http://127.0.0.1:11434/api/${path}${bodyArgument}`;
@@ -759,6 +915,16 @@ ipcMain.handle("ssh-connect", async (_event, rawCredentials) => {
       ...rawCredentials,
       port: rawCredentials?.port ?? savedCredentials.port,
       password: rawCredentials?.password || savedCredentials.password,
+    });
+
+    ipcMain.handle("ssh:reconnect", async () => {
+      if (!lastCredentials) throw new Error("No previous SSH connection is available.");
+      intentionalDisconnect = false;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      return connectSsh(lastCredentials, { preserveReconnectState: true });
     });
     return await connectSsh(credentials);
   } catch (error) {
@@ -992,28 +1158,83 @@ ipcMain.handle("ssh:power-action", async (_event, action) => {
 
 ipcMain.handle("ssh:restart-container", async (_event, containerName) => {
   if (typeof containerName !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(containerName)) {
-    throw new Error("Invalid Docker container name.");
+    return { success: false, error: "Invalid Docker container name.", attempts: [] };
   }
-  await executeRemote(dockerCommand(`restart -- ${containerName}`));
-  return { name: containerName, restartedAt: new Date().toISOString() };
+  const result = await executeDockerAttempts([
+    dockerCommand(`restart -- ${shellQuote(containerName)}`),
+    `sudo -n docker restart -- ${shellQuote(containerName)}`
+  ]);
+  if (result.success) remoteStatusCache.expiresAt = 0;
+  return { ...result, name: containerName, restartedAt: result.success ? new Date().toISOString() : null };
 });
 
 ipcMain.handle("ssh:docker-action", async (_event, request) => {
-  const allowedActions = new Set(["start", "stop", "logs"]);
+  const allowedActions = new Set(["start", "stop", "restart", "logs"]);
   if (!request || !allowedActions.has(request.action) || !deploymentName(request.name)) {
-    throw new Error("Invalid Docker action.");
+    return { success: false, error: "Invalid Docker action.", attempts: [] };
   }
   const command = request.action === "logs"
     ? dockerCommand(`logs --tail 100 ${shellQuote(request.name)}`)
-    : dockerCommand(`${request.action} -- ${request.name}`);
-  if (request.action === "logs") return { name: request.name, action: request.action, output: await executeRemote(command, { timeoutMs: 30000 }) };
-  await executeRemote(command, { timeoutMs: 30000 });
-  remoteStatusCache.expiresAt = 0;
-  return { name: request.name, action: request.action };
+    : dockerCommand(`${request.action} -- ${shellQuote(request.name)}`);
+  const commands = request.action === "logs"
+    ? [command, `sudo -n docker logs --tail 100 ${shellQuote(request.name)}`]
+    : [command, `sudo -n docker ${request.action} -- ${shellQuote(request.name)}`];
+  if (request.action === "logs") {
+    const result = await executeDockerAttempts(commands);
+    return { ...result, name: request.name, action: request.action, output: result.success ? result.output || "" : "" };
+  }
+  const result = await executeDockerAttempts(commands);
+  if (result.success) remoteStatusCache.expiresAt = 0;
+  return { ...result, name: request.name, action: request.action };
+});
+
+ipcMain.handle("ssh:docker-create", async (_event, configuration) => {
+  return createDockerContainer(configuration);
+});
+
+ipcMain.handle("ssh:docker-launch-preset", async (_event, preset) => {
+  if (typeof preset !== "string" || !Object.hasOwn(dockerPresets, preset)) {
+    return { success: false, error: "Unknown Docker preset.", attempts: [] };
+  }
+  return createDockerContainer(dockerPresets[preset], true);
+});
+
+ipcMain.handle("ssh:docker-update", async (_event, configuration) => {
+  let config;
+  try {
+    config = normalizedDockerConfig(configuration);
+  } catch (error) {
+    return { success: false, error: error.message, attempts: [] };
+  }
+  const inspectCommand = dockerCommand(`inspect --format '{{.Config.Image}}' ${shellQuote(config.name)}`);
+  try {
+    const currentImage = (await executeRemote(inspectCommand, { timeoutMs: 15000 })).trim();
+    if (!currentImage || currentImage !== config.image) {
+      return { success: false, error: "Editing a container image requires an explicit recreate.", attempts: [] };
+    }
+  } catch (error) {
+    return { success: false, error: "Container could not be inspected before update.", attempts: [{ attempt: 1, error: error.message }] };
+  }
+  const stop = await executeDockerAttempts([
+    dockerCommand(`stop --time 10 ${shellQuote(config.name)}`),
+    `sudo -n docker stop --time 10 ${shellQuote(config.name)}`
+  ]);
+  if (!stop.success) return { ...stop, name: config.name };
+  const remove = await executeDockerAttempts([
+    dockerCommand(`rm ${shellQuote(config.name)}`),
+    `sudo -n docker rm ${shellQuote(config.name)}`
+  ]);
+  if (!remove.success) return { ...remove, name: config.name, error: `Container stopped but could not be removed: ${remove.error}` };
+  const created = await executeDockerAttempts([dockerCommand(dockerArguments(config)), dockerCommand(dockerArguments(config, true)), `sudo -n docker ${dockerArguments(config, true)}`], 60000);
+  if (created.success) remoteStatusCache.expiresAt = 0;
+  return { ...created, name: config.name, recreated: true };
 });
 
 ipcMain.handle("ssh:disconnect", () => {
+  intentionalDisconnect = true;
   closeSshConnection();
+  lastCredentials = null;
+  reconnectAttempt = 0;
   ollamaVramCache = { expiresAt: 0, value: null, pending: null };
   return true;
 });

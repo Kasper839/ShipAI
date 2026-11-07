@@ -333,6 +333,7 @@ body { background-image: none; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
 .button { border-radius: 8px; font-weight: 680; transition: border-color .2s, background .2s, transform .2s, box-shadow .2s; }
 .button:hover { transform: translateY(-1px); }
+.button:active:not(:disabled) { transform: scale(.98); }
 .button-primary { background: var(--accent); border-color: var(--accent); box-shadow: 0 8px 20px rgba(53,208,186,.14); color: #071318; }
 .button-primary:hover { background: #54dfca; border-color: #54dfca; }
 .button-quiet { background: transparent; border: 1px solid var(--border-strong); color: var(--muted); }
@@ -360,6 +361,27 @@ body { background-image: none; }
 .capacity-status { align-items: center; display: flex; gap: 7px; grid-column: 2; }
 .capacity-status small { color: var(--muted); }
 .status-dot--success { background: var(--success); box-shadow: 0 0 8px rgba(53,208,127,.5); }
+.container-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); padding: 18px 24px 24px; }
+.container-card { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px; min-width: 0; overflow: hidden; }
+.container-card-heading { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; padding: 16px 16px 10px; }
+.container-state { align-items: center; color: var(--muted); display: inline-flex; flex: 0 0 auto; font-size: 11px; gap: 6px; }
+.container-state .status-dot { background: #64748b; box-shadow: none; }
+.container-state.is-running { color: var(--success); }
+.container-state.is-running .status-dot { background: var(--success); box-shadow: 0 0 8px rgba(53,208,127,.45); }
+.container-image, .container-status { color: var(--muted); font-family: var(--font-mono); font-size: 11px; margin: 0; overflow: hidden; padding: 0 16px; text-overflow: ellipsis; white-space: nowrap; }
+.container-status { color: var(--subtle); margin-top: 6px; }
+.container-card-actions { border-top: 1px solid var(--border); display: flex; gap: 6px; margin-top: 14px; padding: 10px 12px; }
+.container-card-actions .button { flex: 1; min-width: 0; padding-left: 7px; padding-right: 7px; }
+.docker-panel-actions { align-items: center; display: flex; gap: 12px; }
+.docker-presets { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); padding: 18px 24px 0; }
+.docker-preset-card { align-items: center; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px; display: flex; gap: 14px; justify-content: space-between; min-width: 0; padding: 16px; }
+.docker-preset-card h3 { font-size: 13px; margin: 0 0 5px; }
+.docker-preset-card p { color: var(--muted); font-size: 11px; line-height: 1.4; margin: 0; }
+.docker-preset-card .button { flex: 0 0 auto; }
+.docker-editor-card .modal-actions { margin-top: 4px; }
+.form-error { color: var(--danger); font-size: 12px; margin: 0; }
+.docker-logs-card { max-width: 760px; }
+.docker-logs-output { background: #0d1117; border: 1px solid var(--border); color: var(--muted); max-height: 60vh; overflow: auto; padding: 14px; white-space: pre-wrap; word-break: break-word; }
 .panel, .metric-card, .model-card, .chat-studio { background: var(--surface); border-color: var(--border); border-radius: 12px; box-shadow: none; }
 .charts-panel, .storage-panel, .vram-panel { margin-top: 16px; }
 .panel-header { border-color: var(--border); padding: 18px 20px; }

@@ -10,7 +10,7 @@
     disconnect: $("disconnect-button"), error: $("dashboard-error"),
     environmentWarning: $("environment-warning"), updated: $("charts-status"),
     dockerStatus: $("docker-status"),
-    containerCount: $("container-count"), tableBody: $("containers-table-body"),
+    containerCount: $("container-count"), containerGrid: $("docker-container-grid"),
     chartCpuValue: $("chart-cpu-value"), chartRamValue: $("chart-ram-value"),
     chartNetworkValue: $("chart-network-value"), chartDiskValue: $("chart-disk-value"),
     storageList: $("storage-list"), vramActive: $("active-vram"), vramFreeable: $("freeable-vram"),
@@ -60,6 +60,90 @@
 
   const showError = (error) => { elements.error.textContent = error.message || "Unable to retrieve server telemetry."; elements.error.hidden = false; };
   const showToast = (message) => { const toast = $("dashboard-toast"); toast.textContent = message; toast.hidden = false; window.setTimeout(() => { toast.hidden = true; }, 2600); };
+  const dockerPresets = {
+    ollama: { name: "ollama", image: "ollama/ollama:latest", ports: "11434:11434", environment: "" },
+    postgres: { name: "postgres", image: "postgres:16-alpine", ports: "5432:5432", environment: "POSTGRES_USER=shipai\nPOSTGRES_PASSWORD=change-me\nPOSTGRES_DB=shipai" },
+    redis: { name: "redis", image: "redis:7-alpine", ports: "6379:6379", environment: "" },
+  };
+  const renderDocker = (telemetry) => {
+    const containers = Array.isArray(telemetry?.containers) ? telemetry.containers : [];
+    if (!elements.containerGrid) return;
+    elements.containerCount.textContent = `${containers.length} container${containers.length === 1 ? "" : "s"}`;
+    elements.containerGrid.replaceChildren();
+    if (telemetry.docker?.error) {
+      elements.containerGrid.innerHTML = `<p class="catalogue-loading">${escapeHtml(telemetry.docker.error)} Retrying with the next telemetry refresh.</p>`;
+      return;
+    }
+    if (!containers.length) {
+      elements.containerGrid.innerHTML = '<p class="catalogue-loading">No Docker containers found.</p>';
+      return;
+    }
+    containers.forEach((container) => {
+      const name = String(container.name || "").replace(/^\/+/, "");
+      const running = String(container.state || "").toLowerCase() === "running";
+      const card = document.createElement("article");
+      card.className = "container-card";
+      card.innerHTML = `<div class="container-card-heading"><div><strong class="service-name"></strong><span class="service-id"></span></div><span class="container-state ${running ? "is-running" : ""}"><span class="status-dot"></span>${running ? "Running" : "Stopped"}</span></div><p class="container-image"></p><p class="container-status"></p><div class="container-card-actions"><button class="button button-small button-secondary" type="button" data-docker-action="start">Start</button><button class="button button-small button-secondary" type="button" data-docker-action="stop">Stop</button><button class="button button-small button-secondary" type="button" data-docker-action="restart">Restart</button><button class="button button-small button-quiet" type="button" data-docker-action="logs">Logs</button></div>`;
+      card.dataset.containerName = name;
+      card.querySelector(".service-name").textContent = name;
+      card.querySelector(".service-id").textContent = String(container.id || "").slice(0, 12);
+      card.querySelector(".container-image").textContent = String(container.image || "Image unavailable");
+      card.querySelector(".container-status").textContent = String(container.status || "No status details");
+      card.querySelector('[data-docker-action="start"]').disabled = running;
+      card.querySelector('[data-docker-action="stop"]').disabled = !running;
+      card.querySelector('[data-docker-action="restart"]').disabled = !running;
+      elements.containerGrid.append(card);
+    });
+  };
+  const showDockerLogs = (name, output) => {
+    const existing = $("docker-logs-modal");
+    if (existing) existing.remove();
+    const modal = document.createElement("div");
+    modal.id = "docker-logs-modal";
+    modal.className = "modal-backdrop";
+    modal.innerHTML = '<article class="modal-card docker-logs-card" role="dialog" aria-modal="true" aria-labelledby="docker-logs-title"><button class="modal-close" type="button" aria-label="Close">×</button><h2 id="docker-logs-title"></h2><pre class="docker-logs-output"></pre></article>';
+    modal.querySelector("h2").textContent = `${name} logs`;
+    modal.querySelector(".docker-logs-output").textContent = output || "No logs returned.";
+    modal.querySelector(".modal-close").addEventListener("click", () => modal.remove());
+    modal.addEventListener("click", (event) => { if (event.target === modal) modal.remove(); });
+    document.body.append(modal);
+  };
+  const dockerAction = async (button) => {
+    const card = button.closest(".container-card");
+    const name = card?.dataset.containerName;
+    const action = button.dataset.dockerAction;
+    if (!name || !action) return;
+    button.disabled = true;
+    try {
+      const result = await window.api.dockerAction(action, name);
+      if (!result?.success) throw new Error(result?.error || "Docker action failed after all safe retries.");
+      if (action === "logs") showDockerLogs(name, result.output);
+      else showToast(`${action[0].toUpperCase()}${action.slice(1)} requested for ${name}.`);
+      await refresh();
+    } catch (error) {
+      showError(error);
+    } finally {
+      button.disabled = false;
+    }
+  };
+  const launchDockerPreset = async (button) => {
+    const preset = button.dataset.dockerPreset;
+    if (!preset || !dockerPresets[preset]) return;
+    button.disabled = true;
+    try {
+      const result = await window.api.launchDockerPreset(preset);
+      if (!result?.success) throw new Error(result?.error || "Docker preset could not be started.");
+      const portNotice = result.usedPorts?.join(", ") !== dockerPresets[preset].ports
+        ? ` Available ports: ${result.usedPorts.join(", ")}.`
+        : "";
+      showToast(`${dockerPresets[preset].name} started.${portNotice}`);
+      await refresh();
+    } catch (error) {
+      showError(error);
+    } finally {
+      button.disabled = false;
+    }
+  };
   const copyValue = async (value, label = "Value") => {
     if (!value) return;
     try {
@@ -143,29 +227,6 @@
     chart.innerHTML = `<path d="M 0 96 H 320 M 0 57 H 320 M 0 18 H 320" stroke="#30363d" stroke-width="1" fill="none"/><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
   };
 
-  const runDockerAction = async (action, container, button) => {
-    button.disabled = true;
-    try { const result = await window.api.dockerAction(action, container.name); if (action === "logs") { $("deployment-log").hidden = false; $("deployment-log").textContent = result.output || "No logs available."; } }
-    catch (error) { renderDockerRepair({ state: "repairing", message: "Docker is recovering. The action will be available when the daemon is ready." }); void ensureDockerAccess(); } finally { button.disabled = false; }
-  };
-  const renderContainers = (containers) => {
-    if (!elements.containerCount || !elements.tableBody) return;
-    elements.containerCount.textContent = String(containers.filter((container) => container.state === "running").length);
-    elements.tableBody.replaceChildren();
-    containers.forEach((container) => {
-      const running = container.state === "running" || /^up\b/i.test(container.status);
-      const row = document.createElement("tr");
-      row.innerHTML = `<th scope="row"><span class="service-name"></span><span class="service-id"></span></th><td class="container-image"></td><td><span class="status-badge"><span class="status-dot" aria-hidden="true"></span><span data-container-state></span></span></td><td class="last-action"></td><td><span data-container-actions></span></td>`;
-      row.querySelector(".service-name").textContent = container.name; makeCopyable(row.querySelector(".service-id"), container.id, "Container ID"); makeCopyable(row.querySelector(".container-image"), container.ports || t("noPorts", "No published ports"), "Port");
-      row.querySelector("[data-container-state]").textContent = running ? t("running", "Running") : t("stopped", "Stopped"); row.querySelector(".last-action").textContent = t("synced", "Synced");
-      const actions = row.querySelector("[data-container-actions]");
-      [["start", t("start", "Start")], ["stop", t("stop", "Stop")], ["logs", t("logs", "Logs")]].filter(([action]) => action === "logs" || action === (running ? "stop" : "start")).forEach(([action, label]) => {
-        const button = document.createElement("button"); button.className = "button button-small button-secondary"; button.type = "button"; button.textContent = label;
-        button.addEventListener("click", () => runDockerAction(action, container, button)); actions.append(button);
-      });
-      elements.tableBody.append(row);
-    });
-  };
   const renderDockerStatus = (docker) => {
     if (!elements.dockerStatus) return;
     const available = docker?.dockerAvailable === true;
@@ -175,7 +236,7 @@
     if (dockerMeta) dockerMeta.textContent = available ? "Connected environment" : "Requires attention";
     elements.dockerStatus.hidden = available;
     if (!available) elements.dockerStatus.textContent = docker?.error || "Docker is synchronizing over SSH.";
-    renderContainers(available ? (docker.containers || []) : []);
+    renderDocker({ containers: available ? (docker.containers || []) : [], docker });
   };
   const renderDockerRepair = (status) => {
     if (!elements.dockerStatus) return;
@@ -440,6 +501,7 @@
   const renderTelemetry = (telemetry) => {
     if (!telemetry) return;
     elements.error.hidden = true;
+    renderDockerStatus(telemetry.docker);
     elements.temperature.textContent = telemetry.cpuTemperatureC === null ? "N/A" : telemetry.cpuTemperatureC.toFixed(1);
     if (telemetry.cpuUsagePercent !== null) { addHistoryPoint("cpu", telemetry.cpuUsagePercent); elements.chartCpuValue.textContent = `${telemetry.cpuUsagePercent}%`; }
     if (telemetry.networkBytesPerSecond !== null) { addHistoryPoint("network", telemetry.networkBytesPerSecond); elements.chartNetworkValue.textContent = `${(telemetry.networkBytesPerSecond / 1024).toFixed(1)} KB/s`; }
@@ -559,6 +621,40 @@
     }
     updateModelProgress({ ...data, state: data.status === "success" ? "complete" : "downloading" });
   };
-  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { const wasCancelled = cancelledDownloadJobs.has(payload.jobId); if (!wasCancelled) updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete" || payload.state === "error" || payload.state === "cancelled") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (payload.jobId === activeDownloadJobId) activeDownloadJobId = ""; if ((payload.state === "error" || payload.state === "cancelled") && task) taskTabs.delete(task.taskId); if (task && payload.state === "complete" && !wasCancelled) openTaskChat(task); if (payload.state === "error" && !wasCancelled && payload.message !== "Model download cancelled.") showError(new Error(payload.message || "Model download failed.")); if (payload.state === "complete" && !wasCancelled) void refreshInstalledModels(); if (wasCancelled) cancelledDownloadJobs.delete(payload.jobId); } }); window.api.onConnectionState(() => { window.clearInterval(refreshTimer); window.clearInterval(modelSyncTimer); window.clearInterval(hardwareSyncTimer); const layout = document.querySelector(".dashboard-layout"); const lostView = $("connection-lost-view"); if (layout) layout.hidden = true; if (lostView) lostView.hidden = false; }); $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.disconnect(); } finally { window.location.assign("index.html"); } }); elements.cancelDownload?.addEventListener("click", async () => { const cancelledJobId = activeDownloadJobId; if (!cancelledJobId) return; cancelledDownloadJobs.add(cancelledJobId); const cancelledModel = activeDownloadModel; activeDownloadJobId = ""; const panel = $("model-progress"); panel.hidden = true; panel.dataset.active = "false"; elements.cancelDownload.hidden = true; elements.cancelDownload.disabled = true; const task = [...taskTabs.values()].find((item) => item.jobId === cancelledJobId); if (task) taskTabs.delete(task.taskId); try { await window.api.cancelOllamaPull(cancelledJobId); } catch { } showToast(`${cancelledModel || "Model"} download cancelled.`);   }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); void updateHardwareStatus(); void refresh(); void refreshInstalledModels(); refreshTimer = window.setInterval(refresh, 3000); modelSyncTimer = window.setInterval(() => { void refreshInstalledModels(); }, 10000); hardwareSyncTimer = window.setInterval(() => { void updateHardwareStatus(); }, 10000);
+  window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { const wasCancelled = cancelledDownloadJobs.has(payload.jobId); if (!wasCancelled) updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete" || payload.state === "error" || payload.state === "cancelled") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (payload.jobId === activeDownloadJobId) activeDownloadJobId = ""; if ((payload.state === "error" || payload.state === "cancelled") && task) taskTabs.delete(task.taskId); if (task && payload.state === "complete" && !wasCancelled) openTaskChat(task); if (payload.state === "error" && !wasCancelled && payload.message !== "Model download cancelled.") showError(new Error(payload.message || "Model download failed.")); if (payload.state === "complete" && !wasCancelled) void refreshInstalledModels(); if (wasCancelled) cancelledDownloadJobs.delete(payload.jobId); } });
+  elements.containerGrid?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-docker-action]");
+    if (button) void dockerAction(button);
+  });
+  document.querySelectorAll("[data-docker-preset]").forEach((button) => {
+    button.addEventListener("click", () => void launchDockerPreset(button));
+  });
+  window.api.onConnectionState((payload) => {
+    const reconnecting = payload?.state === "reconnecting";
+    const layout = document.querySelector(".dashboard-layout");
+    const lostView = $("connection-lost-view");
+    if (reconnecting) {
+      if (layout) layout.hidden = false;
+      if (lostView) lostView.hidden = true;
+      showError(new Error(`Connection interrupted. Retrying automatically (attempt ${payload.attempt || 1})...`));
+      return;
+    }
+    if (payload?.state === "connected") {
+      if (lostView) lostView.hidden = true;
+      if (layout) layout.hidden = false;
+      elements.error.hidden = true;
+      window.clearInterval(refreshTimer); window.clearInterval(modelSyncTimer); window.clearInterval(hardwareSyncTimer);
+      refreshTimer = window.setInterval(refresh, 3000);
+      modelSyncTimer = window.setInterval(() => { void refreshInstalledModels(); }, 10000);
+      hardwareSyncTimer = window.setInterval(() => { void updateHardwareStatus(); }, 10000);
+      void refresh();
+      return;
+    }
+    window.clearInterval(refreshTimer); window.clearInterval(modelSyncTimer); window.clearInterval(hardwareSyncTimer);
+    if (layout) layout.hidden = true;
+    if (lostView) lostView.hidden = false;
+  });
+  $("reconnect-button")?.addEventListener("click", async () => { $("reconnect-button").disabled = true; try { await window.api.reconnect(); } catch (error) { showError(error); } finally { $("reconnect-button").disabled = false; } });
+  elements.cancelDownload?.addEventListener("click", async () => { const cancelledJobId = activeDownloadJobId; if (!cancelledJobId) return; cancelledDownloadJobs.add(cancelledJobId); const cancelledModel = activeDownloadModel; activeDownloadJobId = ""; const panel = $("model-progress"); panel.hidden = true; panel.dataset.active = "false"; elements.cancelDownload.hidden = true; elements.cancelDownload.disabled = true; const task = [...taskTabs.values()].find((item) => item.jobId === cancelledJobId); if (task) taskTabs.delete(task.taskId); try { await window.api.cancelOllamaPull(cancelledJobId); } catch { } showToast(`${cancelledModel || "Model"} download cancelled.`);   }); setDashboardTab("overview"); initializeChat(); loadCatalogue(); void updateHardwareStatus(); void refresh(); void refreshInstalledModels(); refreshTimer = window.setInterval(refresh, 3000); modelSyncTimer = window.setInterval(() => { void refreshInstalledModels(); }, 10000); hardwareSyncTimer = window.setInterval(() => { void updateHardwareStatus(); }, 10000);
   elements.disconnect.addEventListener("click", async () => { window.clearInterval(refreshTimer); window.clearInterval(modelSyncTimer); await window.api.disconnect(); window.location.assign("index.html"); });
 })();
