@@ -61,12 +61,17 @@
   const showError = (error) => { elements.error.textContent = error.message || "Unable to retrieve server telemetry."; elements.error.hidden = false; };
   const showToast = (message) => { const toast = $("dashboard-toast"); toast.textContent = message; toast.hidden = false; window.setTimeout(() => { toast.hidden = true; }, 2600); };
   const dockerPresets = {
+    nextcloud: { name: "Nextcloud", category: "Home & Cloud", ports: "8080:80", description: "Soukromý cloud, disk a kalendář." },
+    immich: { name: "Immich", category: "Home & Cloud", ports: "2283:2283", description: "Záloha fotek a videí z mobilu." },
+    jellyfin: { name: "Jellyfin", category: "Home & Cloud", ports: "8096:8096", description: "Vlastní domácí Netflix." },
+    adguardhome: { name: "AdGuard Home", category: "Home & Cloud", ports: "3005:3000", description: "Blokování reklam v domácí síti." },
+    homeassistant: { name: "Home Assistant", category: "Home & Cloud", ports: "8123:8123", description: "Ovládání chytré domácnosti." },
+    qbittorrent: { name: "qBittorrent", category: "Home & Cloud", ports: "8083:8080", description: "Stahování souborů přes web." },
     openwebui: { name: "Open WebUI", category: "AI & LLM", ports: "3000:8080", description: "ChatGPT rozhraní pro Ollamu." },
     librechat: { name: "LibreChat", category: "AI & LLM", ports: "3080:3080", description: "Univerzální chatové rozhraní." },
     anythingllm: { name: "AnythingLLM", category: "AI & LLM", ports: "3001:3001", description: "Chat s vlastními PDF dokumenty." },
     flowise: { name: "Flowise", category: "AI & LLM", ports: "3002:3000", description: "Vizuální tvorba AI agentů." },
     qdrant: { name: "Qdrant", category: "AI & LLM", ports: "6333:6333", description: "Vektorová databáze." },
-    nextcloud: { name: "Nextcloud", category: "Self-Hosted & Cloud", ports: "8080:80", description: "Vlastní cloud a úložiště." },
     portainer: { name: "Portainer", category: "Self-Hosted & Cloud", ports: "9000:9000", description: "Pokročilá správa Dockeru." },
     uptimekuma: { name: "Uptime Kuma", category: "Self-Hosted & Cloud", ports: "3003:3001", description: "Hlídání dostupnosti serverů a webů." },
     vaultwarden: { name: "Vaultwarden", category: "Self-Hosted & Cloud", ports: "8081:80", description: "Správce hesel kompatibilní s Bitwarden." },
@@ -147,7 +152,7 @@
       const preset = Object.values(dockerPresets).find((item) => serviceKey(item.name) === serviceKey(name));
       const protocol = dockerProtocols[Object.keys(dockerPresets).find((key) => dockerPresets[key] === preset)] || "http";
       const url = launch?.url || (host && mappedPort && preset ? `${protocol}://${host}:${mappedPort}` : "");
-      card.innerHTML = `<div class="container-card-heading"><div><strong class="service-name"></strong><span class="service-id"></span></div><span class="container-state ${running ? "is-running" : ""}"><span class="status-dot"></span>${running ? "Running" : "Stopped"}</span></div><p class="container-image"></p><p class="container-status"></p>${url ? `<div class="container-next"><strong>Co dělat dál</strong><a class="container-url" target="_blank" rel="noreferrer"></a><button class="button button-small button-quiet" type="button" data-copy-url>Copy URL</button><p class="container-instructions"></p></div>` : ""}<div class="container-card-actions"><button class="button button-small button-secondary" type="button" data-docker-action="start">Start</button><button class="button button-small button-secondary" type="button" data-docker-action="stop">Stop</button><button class="button button-small button-secondary" type="button" data-docker-action="restart">Restart</button><button class="button button-small button-quiet" type="button" data-docker-action="logs">Logs</button></div>`;
+      card.innerHTML = `<div class="container-card-heading"><div><strong class="service-name"></strong><span class="service-id"></span></div><span class="container-state ${running ? "is-running" : ""}"><span class="status-dot"></span>${running ? "Running" : "Stopped"}</span></div><p class="container-image"></p><p class="container-status"></p>${url ? `<div class="container-next"><strong>Co dělat dál</strong><a class="container-url" target="_blank" rel="noreferrer"></a><button class="button button-small button-quiet" type="button" data-copy-url>Copy URL</button><p class="container-instructions"></p></div>` : ""}<div class="container-card-actions"><button class="button button-small button-secondary" type="button" data-docker-action="start">Start</button><button class="button button-small button-secondary" type="button" data-docker-action="stop">Stop</button><button class="button button-small button-secondary" type="button" data-docker-action="restart">Restart</button><button class="button button-small button-quiet" type="button" data-docker-action="logs">Logs</button><button class="button button-small button-danger" type="button" data-docker-action="delete">Delete</button></div>`;
       card.dataset.containerName = name;
       card.querySelector(".service-name").textContent = name;
       card.querySelector(".service-id").textContent = String(container.id || "").slice(0, 12);
@@ -185,6 +190,15 @@
     if (!name || !action) return;
     button.disabled = true;
     try {
+      if (action === "delete") {
+        if (!window.confirm(`Stop and permanently delete ${name}?`)) return;
+        const removeVolumes = window.confirm("Also delete attached Docker volumes and their data? This cannot be undone.");
+        const result = await window.api.deleteDockerContainer(name, removeVolumes);
+        if (!result?.success) throw new Error(result?.error || "Container could not be deleted.");
+        showToast(`${name} deleted${removeVolumes ? " with volumes" : ""}.`);
+        await refresh();
+        return;
+      }
       const result = await window.api.dockerAction(action, name);
       if (!result?.success) throw new Error(result?.error || "Docker action failed after all safe retries.");
       if (action === "logs") showDockerLogs(name, result.output);

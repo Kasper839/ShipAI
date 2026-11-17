@@ -739,12 +739,17 @@ const offsetDockerPorts = (configuration, offset) => ({
   })
 });
 const dockerPresets = Object.freeze({
+  nextcloud: { name: "nextcloud", image: "nextcloud:latest", category: "Home & Cloud", ports: ["8080:80"], environment: {}, protocol: "http", instructions: "Vytvoř první admin účet a dokonči úvodní nastavení databáze." },
+  immich: { name: "immich", image: "ghcr.io/immich-app/immich-server:release", category: "Home & Cloud", ports: ["2283:2283"], environment: {}, protocol: "http", instructions: "Vytvoř účet správce a v mobilní aplikaci nastav tuto URL jako server pro zálohu fotek." },
+  jellyfin: { name: "jellyfin", image: "jellyfin/jellyfin:latest", category: "Home & Cloud", ports: ["8096:8096"], environment: {}, protocol: "http", instructions: "Vyber jazyk, přidej knihovny filmů a seriálů a vytvoř uživatele." },
+  adguardhome: { name: "adguardhome", image: "adguard/adguardhome:latest", category: "Home & Cloud", ports: ["3005:3000"], environment: {}, protocol: "http", instructions: "Dokonči průvodce, nastav DNS server a v routeru změň DNS na IP serveru." },
+  homeassistant: { name: "homeassistant", image: "ghcr.io/home-assistant/home-assistant:stable", category: "Home & Cloud", ports: ["8123:8123"], environment: {}, protocol: "http", instructions: "Vytvoř účet, nastav domácí lokaci a přidej integrace chytré domácnosti." },
+  qbittorrent: { name: "qbittorrent", image: "lscr.io/linuxserver/qbittorrent:latest", category: "Home & Cloud", ports: ["8083:8080"], environment: {}, protocol: "http", instructions: "Přihlaš se do webového rozhraní, změň výchozí heslo a nastav složku pro stahování." },
   openwebui: { name: "open-webui", image: "ghcr.io/open-webui/open-webui:main", category: "AI & LLM", ports: ["3000:8080"], environment: {}, extraArgs: ["--add-host", "host.docker.internal:host-gateway"], protocol: "http", instructions: "Vytvoř si první admin účet. Ollamu nastav na http://host.docker.internal:11434." },
   librechat: { name: "librechat", image: "linuxserver/librechat:latest", category: "AI & LLM", ports: ["3080:3080"], environment: {}, extraArgs: ["--add-host", "host.docker.internal:host-gateway"], protocol: "http", instructions: "Dokonči úvodní konfiguraci a jako Ollama endpoint použij http://host.docker.internal:11434." },
   anythingllm: { name: "anythingllm", image: "mintplexlabs/anythingllm:latest", category: "AI & LLM", ports: ["3001:3001"], environment: { STORAGE_DIR: "/app/server/storage" }, extraArgs: ["--add-host", "host.docker.internal:host-gateway"], protocol: "http", instructions: "Vytvoř účet, vyber Ollama a nastav endpoint http://host.docker.internal:11434; potom nahraj PDF do workspace." },
   flowise: { name: "flowise", image: "flowiseai/flowise:latest", category: "AI & LLM", ports: ["3002:3000"], environment: {}, extraArgs: ["--add-host", "host.docker.internal:host-gateway"], protocol: "http", instructions: "Vytvoř první flow a v nastavení modelu zvol Ollama na http://host.docker.internal:11434." },
   qdrant: { name: "qdrant", image: "qdrant/qdrant:latest", category: "AI & LLM", ports: ["6333:6333"], environment: {}, protocol: "http", instructions: "Qdrant je připraven bez účtu. API a dashboard otevřeš na uvedené URL; kolekce vytvoř přes REST API." },
-  nextcloud: { name: "nextcloud", image: "nextcloud:latest", category: "Self-Hosted & Cloud", ports: ["8080:80"], environment: {}, protocol: "http", instructions: "Vytvoř administrátora a nastav databázi. Pro test lze použít SQLite, pro produkci doporučujeme PostgreSQL." },
   portainer: { name: "portainer", image: "portainer/portainer-ce:latest", category: "Self-Hosted & Cloud", ports: ["9000:9000"], environment: {}, extraArgs: ["-v", "/var/run/docker.sock:/var/run/docker.sock"], protocol: "http", instructions: "Vytvoř první admin účet a zvol lokální Docker environment." },
   uptimekuma: { name: "uptime-kuma", image: "louislam/uptime-kuma:latest", category: "Self-Hosted & Cloud", ports: ["3003:3001"], environment: {}, protocol: "http", instructions: "Vytvoř admin účet a přidej URL služeb, které chceš monitorovat." },
   vaultwarden: { name: "vaultwarden", image: "vaultwarden/server:latest", category: "Self-Hosted & Cloud", ports: ["8081:80"], environment: {}, protocol: "http", instructions: "Vytvoř účet až po nastavení HTTPS reverse proxy; bez HTTPS nepoužívej skutečná hesla." },
@@ -1230,6 +1235,43 @@ ipcMain.handle("ssh:docker-action", async (_event, request) => {
   const result = await executeDockerAttempts(commands);
   if (result.success) remoteStatusCache.expiresAt = 0;
   return { ...result, name: request.name, action: request.action };
+});
+
+ipcMain.handle("ssh:docker-delete", async (_event, request) => {
+  const name = request && request.name;
+  const removeVolumes = request && request.removeVolumes === true;
+  if (!deploymentName(name)) return { success: false, error: "Invalid Docker container name.", attempts: [] };
+  let volumes = [];
+  if (removeVolumes) {
+    try {
+      const mountedVolumes = await executeRemote(
+        `docker inspect --format '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\\n"}}{{end}}{{end}}' ${shellQuote(name)} || sudo -n docker inspect --format '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\\n"}}{{end}}{{end}}' ${shellQuote(name)}`,
+        { timeoutMs: 10000 }
+      );
+      volumes = mountedVolumes.split(/\r?\n/).map((value) => value.trim())
+        .filter((value) => /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,254}$/.test(value));
+    } catch (error) {
+      return { success: false, error: `Volumes could not be inspected: ${error.message}`, attempts: [] };
+    }
+  }
+  const volumeFlag = removeVolumes ? " -v" : "";
+  const result = await executeDockerAttempts([
+    dockerCommand(`rm -f${volumeFlag} ${shellQuote(name)}`),
+    `sudo -n docker rm -f${volumeFlag} ${shellQuote(name)}`
+  ], 30000, false);
+  if (result.success && removeVolumes) {
+    for (const volume of volumes) {
+      const volumeResult = await executeDockerAttempts([
+        dockerCommand(`volume rm ${shellQuote(volume)}`),
+        `sudo -n docker volume rm ${shellQuote(volume)}`
+      ], 30000, false);
+      if (!volumeResult.success) {
+        return { ...result, success: false, error: `Container deleted, but volume ${volume} could not be removed.`, volumeAttempts: volumeResult.attempts };
+      }
+    }
+  }
+  if (result.success) remoteStatusCache.expiresAt = 0;
+  return { ...result, name, removeVolumes, removedVolumes: volumes };
 });
 
 ipcMain.handle("ssh:docker-create", async (_event, configuration) => {
