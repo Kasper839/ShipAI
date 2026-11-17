@@ -11,11 +11,11 @@
     "check": "node --check main/main.js && node --check main/profileStore.js && node --check main/sshManager.js && node --check preload.js && node --check app/js/renderer-dashboard.js && node --check app/js/renderer-login.js"
   },
   "dependencies": {
-    "posthog-node": "^5.61.1",
+    "posthog-node": "^5.74.0",
     "ssh2": "^1.16.0"
   },
   "devDependencies": {
-    "electron": "^38.2.0",
+    "electron": "^38.8.6",
     "electron-builder": "^26.0.12"
   },
   "build": {

@@ -300,6 +300,19 @@
     if (name === "overview") void ensureDockerAccess();
     if (name === "marketplace" || name === "ai-chat") void refreshInstalledModels();
   };
+
+  const sidebarToggle = document.getElementById("sidebar-toggle");
+  const sidebar = document.getElementById("workspace-sidebar");
+  sidebarToggle?.addEventListener("click", () => {
+    const collapsed = sidebar?.classList.toggle("is-collapsed") || false;
+    sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+  });
+  sidebar?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-dashboard-tab]") && window.innerWidth <= 720) {
+      sidebar.classList.add("is-collapsed");
+      sidebarToggle?.setAttribute("aria-expanded", "false");
+    }
+  });
   const addHistoryPoint = (key, value) => { if (Number.isFinite(value)) history[key].push(value); if (history[key].length > 30) history[key].shift(); };
   const renderChart = (id, values, color, min = null, max = null) => {
     const chart = $(id); if (!chart) return;

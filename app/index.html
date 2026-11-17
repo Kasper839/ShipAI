@@ -65,13 +65,13 @@
 
           <div class="form-field">
             <label for="password" data-i18n="password">Password</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" data-i18n-placeholder="sshPasswordPlaceholder" placeholder="Enter your SSH password" />
+            <div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" data-i18n-placeholder="sshPasswordPlaceholder" placeholder="Enter your SSH password" /><button class="password-toggle" type="button" data-password-toggle="password" aria-label="Show password" aria-pressed="false">Show</button></div>
             <p class="field-error" data-error-for="password"></p>
           </div>
 
           <div class="form-field">
             <label for="sudo-password" data-i18n="sudoPassword">Sudo password <span class="field-hint" data-i18n="optional">(optional)</span></label>
-            <input id="sudo-password" name="sudoPassword" type="password" autocomplete="current-password" data-i18n-placeholder="defaultSudo" placeholder="Defaults to SSH password" />
+            <div class="password-field"><input id="sudo-password" name="sudoPassword" type="password" autocomplete="current-password" data-i18n-placeholder="defaultSudo" placeholder="Defaults to SSH password" /><button class="password-toggle" type="button" data-password-toggle="sudo-password" aria-label="Show password" aria-pressed="false">Show</button></div>
             <p class="field-error" data-error-for="sudo-password"></p>
           </div>
 

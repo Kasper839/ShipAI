@@ -12,6 +12,18 @@
   let selectedProfile = null;
   const t = (key, fallback) => window.shipaiI18n ? window.shipaiI18n.translate(key) : fallback;
 
+  document.querySelectorAll("[data-password-toggle]").forEach((toggle) => {
+    const input = $(toggle.dataset.passwordToggle);
+    if (!input) return;
+    toggle.addEventListener("click", () => {
+      const visible = input.type === "text";
+      input.type = visible ? "password" : "text";
+      toggle.textContent = visible ? "Show" : "Hide";
+      toggle.setAttribute("aria-label", visible ? "Show password" : "Hide password");
+      toggle.setAttribute("aria-pressed", String(!visible));
+    });
+  });
+
   const setError = (name, value = "") => {
     const field = $(name);
     const error = document.querySelector(`[data-error-for="${name}"]`);
@@ -109,13 +121,6 @@
         password,
         sudoPassword: $("sudo-password").value
       };
-      console.log("[Login] connecting with profile", {
-        profileId: activeCredentials.profileId || null,
-        host: activeCredentials.host,
-        port: activeCredentials.port,
-        username: activeCredentials.username,
-        passwordProvided: Boolean(activeCredentials.password),
-      });
       await window.api.connectSSH(activeCredentials);
       if ($("save-profile").checked) {
         const savedName = profileName || selectedProfile?.name || `${username}@${host}`;
