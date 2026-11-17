@@ -33,7 +33,7 @@ Running a private AI server often means switching between SSH terminals, Docker 
 - Added interactive Docker container cards with running/stopped state indicators and Start, Stop, Restart, and Logs actions
 - Replaced Docker create/edit forms with one-click Ollama Local, PostgreSQL, and Redis template cards
 - Docker operations use bounded daemon probes and fallback command attempts; failures return actionable status without freezing the renderer
-- Preset launches use fixed, validated configurations and reuse `main/docker-init.sh` when the daemon is unavailable
+- Preset launches use fixed, validated configurations and recover an inactive daemon with direct `systemctl`/`service` commands
 - Preset launches retry with alternate host ports after an explicit bind conflict and remove only a matching stopped container when its name is already taken
 - Added automatic SSH reconnect with a quiet in-dashboard retry state instead of freezing the workspace
 - Added consistent press feedback and full-width sidebar controls

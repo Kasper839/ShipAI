@@ -161,6 +161,25 @@ const executeRemote = async (command, options = {}) => {
   return result.stdout;
 };
 
+const executeOllamaRemote = async (command, options = {}) => {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await executeRemote(command, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt === 2) break;
+      if (!sshClient) {
+        scheduleReconnect();
+        await wait(Math.min(5000, 1000 * (attempt + 1)));
+      } else {
+        await wait(500 * (attempt + 1));
+      }
+    }
+  }
+  throw lastError;
+};
+
 const dockerCommand = (argumentsText) => `if docker info >/dev/null 2>&1; then docker ${argumentsText}; else sudo -n docker ${argumentsText}; fi`;
 
 const missingComponentsFrom = (output) => {
@@ -348,13 +367,6 @@ const validateCredentials = (credentials) => {
   const sudoPassword = typeof credentials.sudoPassword === "string" && credentials.sudoPassword.length > 0
     ? credentials.sudoPassword
     : password;
-  console.log("[SSH] validated credentials", {
-    host,
-    port,
-    username,
-    passwordLength: password.length,
-    hasSudoPassword: Boolean(sudoPassword)
-  });
   return { ...credentials, host, username, port, password, sudoPassword };
 };
 
@@ -676,7 +688,7 @@ const dockerArguments = (configuration, includeInit = false) => {
   return `run -d ${includeInit ? "--init " : ""}--name ${shellQuote(config.name)} ${portArgs} ${environmentArgs} ${shellQuote(config.image)}`.replace(/\s+/g, " ").trim();
 };
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-const executeDockerAttempts = async (commands, timeoutMs = 30000) => {
+const executeDockerAttempts = async (commands, timeoutMs = 30000, allowScriptInitialization = true) => {
   const attempts = [];
   let environmentChecked = false;
   for (let index = 0; index < commands.length; index += 1) {
@@ -687,8 +699,17 @@ const executeDockerAttempts = async (commands, timeoutMs = 30000) => {
       } catch (probeError) {
         if (environmentChecked) throw probeError;
         environmentChecked = true;
-        const initialized = await ensureDocker();
-        if (!initialized || !["ready", "ready-sudo"].includes(initialized.state)) throw probeError;
+        if (allowScriptInitialization) {
+          const initialized = await ensureDocker();
+          if (!initialized || !["ready", "ready-sudo"].includes(initialized.state)) throw probeError;
+        } else {
+          try {
+            await executeRemote("sudo -n systemctl start docker >/dev/null 2>&1 || sudo -n service docker start >/dev/null 2>&1", { timeoutMs: 15000 });
+            await executeRemote("docker info >/dev/null 2>&1 || sudo -n docker info >/dev/null 2>&1", { timeoutMs: 10000 });
+          } catch {
+            throw probeError;
+          }
+        }
       }
       const output = await executeRemote(command, { timeoutMs });
       return { success: true, attempt: index + 1, attempts, output };
@@ -724,7 +745,7 @@ const removeStoppedContainer = async (name) => {
     const result = await executeDockerAttempts([
       dockerCommand(`rm ${shellQuote(name)}`),
       `sudo -n docker rm ${shellQuote(name)}`
-    ]);
+    ], 30000, false);
     return result.success;
   } catch {
     return false;
@@ -739,17 +760,17 @@ const createDockerContainer = async (configuration, cleanStopped = false) => {
   }
   const command = dockerArguments(config);
   const fallback = dockerArguments(config, true);
-  let result = await executeDockerAttempts([dockerCommand(command), dockerCommand(fallback), `sudo -n docker ${fallback}`], 60000);
+  let result = await executeDockerAttempts([dockerCommand(command), dockerCommand(fallback), `sudo -n docker ${fallback}`], 60000, false);
   let usedConfiguration = config;
   if (!result.success && cleanStopped && /already exists|conflict.*name/i.test(result.error || "")) {
     await removeStoppedContainer(config.name);
-    result = await executeDockerAttempts([dockerCommand(fallback), `sudo -n docker ${fallback}`], 60000);
+    result = await executeDockerAttempts([dockerCommand(fallback), `sudo -n docker ${fallback}`], 60000, false);
   }
   if (!result.success && config.ports.length && hasPortConflict(result)) {
     for (const offset of [1, 2, 3]) {
       const alternative = offsetDockerPorts(config, offset);
       const alternativeCommand = dockerArguments(alternative, true);
-      result = await executeDockerAttempts([dockerCommand(alternativeCommand), `sudo -n docker ${alternativeCommand}`], 60000);
+      result = await executeDockerAttempts([dockerCommand(alternativeCommand), `sudo -n docker ${alternativeCommand}`], 60000, false);
       if (result.success) {
         usedConfiguration = alternative;
         break;
@@ -780,7 +801,7 @@ const getOllamaVramStatus = async (contextTokens = 4096) => {
   if (ollamaVramCache.value && ollamaVramCache.expiresAt > now) return ollamaVramCache.value;
   if (ollamaVramCache.pending) return ollamaVramCache.pending;
   ollamaVramCache.pending = Promise.allSettled([
-    executeRemote(ollamaApiCommand(), { timeoutMs: 15000 }),
+    executeOllamaRemote(ollamaApiCommand(), { timeoutMs: 15000 }),
     executeRemote("if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi --query-gpu=memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader,nounits; else exit 127; fi", { timeoutMs: 10000 })
   ]).then(([modelsResult, gpuResult]) => {
     const models = modelsResult.status === "fulfilled" ? parseOllamaPs(modelsResult.value) : [];
@@ -940,10 +961,6 @@ ipcMain.handle("ssh-connect", async (_event, rawCredentials) => {
 });
 
 ipcMain.handle("profiles:list", () => profileStore.listProfiles());
-ipcMain.handle("profiles:credentials", (_event, id) => {
-  if (typeof id !== "string" || !id) throw new Error("A saved profile is required.");
-  return profileStore.getProfileCredentials(id);
-});
 ipcMain.handle("profiles:save", (_event, profile) => profileStore.saveProfile(profile));
 ipcMain.handle("profiles:delete", (_event, id) => profileStore.deleteProfile(id));
 ipcMain.handle("get-github-stats", () => getGithubStats());
@@ -1245,6 +1262,9 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+}).catch((error) => {
+  console.error("[App] Startup failed:", error instanceof Error ? error.message : String(error));
+  app.quit();
 });
 
 app.on("window-all-closed", () => {
@@ -1253,6 +1273,10 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  if (telemetryClient) void telemetryClient.shutdown();
+  if (telemetryClient) {
+    Promise.resolve(telemetryClient.shutdown()).catch((error) => {
+      console.warn("[Telemetry] Shutdown failed:", error instanceof Error ? error.message : String(error));
+    });
+  }
   closeSshConnection();
 });

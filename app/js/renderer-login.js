@@ -54,16 +54,6 @@
       $("port").value = String(Number.parseInt(String(selectedProfile.port), 10));
       $("username").value = selectedProfile.username;
       $("password").value = "";
-      try {
-        const credentials = await window.api.getProfileCredentials(selectedProfile.id);
-        if (selectedProfile.id === profileSelect.value) {
-          $("password").value = typeof credentials.password === "string" ? credentials.password : "";
-        }
-      } catch (error) {
-        console.warn("[Login] Unable to decrypt saved password:", error.message);
-        message.textContent = t("savedCredentialUnavailable", "Saved password is unavailable. Enter it again.");
-        message.classList.add("is-error");
-      }
     }
   };
 

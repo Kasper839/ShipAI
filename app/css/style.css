@@ -376,10 +376,11 @@ body { background-image: none; }
 .docker-presets { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); padding: 18px 24px 0; }
 .docker-preset-card { align-items: center; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px; display: flex; gap: 14px; justify-content: space-between; min-width: 0; padding: 16px; }
 .docker-preset-card h3 { font-size: 13px; margin: 0 0 5px; }
-.docker-preset-card p { color: var(--muted); font-size: 11px; line-height: 1.4; margin: 0; }
+.docker-preset-card p { color: var(--muted); font-size: 11px; line-height: 1.4; margin: 0 0 5px; }
+.docker-preset-card p:last-child { margin-bottom: 0; }
+.docker-preset-card code { color: var(--text); font-family: var(--font-mono); font-size: 10px; overflow-wrap: anywhere; }
+.docker-preset-connect { color: var(--subtle); }
 .docker-preset-card .button { flex: 0 0 auto; }
-.docker-editor-card .modal-actions { margin-top: 4px; }
-.form-error { color: var(--danger); font-size: 12px; margin: 0; }
 .docker-logs-card { max-width: 760px; }
 .docker-logs-output { background: #0d1117; border: 1px solid var(--border); color: var(--muted); max-height: 60vh; overflow: auto; padding: 14px; white-space: pre-wrap; word-break: break-word; }
 .panel, .metric-card, .model-card, .chat-studio { background: var(--surface); border-color: var(--border); border-radius: 12px; box-shadow: none; }
