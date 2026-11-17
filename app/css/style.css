@@ -373,14 +373,21 @@ body { background-image: none; }
 .container-card-actions { border-top: 1px solid var(--border); display: flex; gap: 6px; margin-top: 14px; padding: 10px 12px; }
 .container-card-actions .button { flex: 1; min-width: 0; padding-left: 7px; padding-right: 7px; }
 .docker-panel-actions { align-items: center; display: flex; gap: 12px; }
-.docker-presets { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); padding: 18px 24px 0; }
+.docker-presets { display: grid; gap: 20px; padding: 18px 24px 0; }
+.docker-preset-category { display: grid; gap: 10px; }
+.docker-preset-category > h3 { color: var(--subtle); font-size: 12px; letter-spacing: .08em; margin: 0; text-transform: uppercase; }
+.docker-preset-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .docker-preset-card { align-items: center; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px; display: flex; gap: 14px; justify-content: space-between; min-width: 0; padding: 16px; }
-.docker-preset-card h3 { font-size: 13px; margin: 0 0 5px; }
+.docker-preset-card h3, .docker-preset-card h4 { font-size: 13px; margin: 0 0 5px; }
 .docker-preset-card p { color: var(--muted); font-size: 11px; line-height: 1.4; margin: 0 0 5px; }
 .docker-preset-card p:last-child { margin-bottom: 0; }
 .docker-preset-card code { color: var(--text); font-family: var(--font-mono); font-size: 10px; overflow-wrap: anywhere; }
 .docker-preset-connect { color: var(--subtle); }
 .docker-preset-card .button { flex: 0 0 auto; }
+.container-next { background: var(--surface-raised); border-top: 1px solid var(--border); display: grid; gap: 6px; margin-top: 12px; padding: 12px 16px; }
+.container-next strong { font-size: 12px; }
+.container-url { color: var(--accent); font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
+.container-instructions { color: var(--muted); font-size: 11px; line-height: 1.45; margin: 0; }
 .docker-logs-card { max-width: 760px; }
 .docker-logs-output { background: #0d1117; border: 1px solid var(--border); color: var(--muted); max-height: 60vh; overflow: auto; padding: 14px; white-space: pre-wrap; word-break: break-word; }
 .panel, .metric-card, .model-card, .chat-studio { background: var(--surface); border-color: var(--border); border-radius: 12px; box-shadow: none; }

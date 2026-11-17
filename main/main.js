@@ -588,6 +588,7 @@ const getTelemetry = async () => {
   }
   return {
     timestamp: new Date().toISOString(),
+    serverHost: sshConnection?.host || null,
     cpuTemperatureC: temperatureResult.status === "fulfilled" ? parseTemperature(temperatureOutput) : null,
     cpuError: temperatureResult.status === "rejected" ? "CPU temperature unavailable" : null,
     cpuUsagePercent: cpuResult.status === "fulfilled" ? parseCpuUsage(cpuOutput) : null,
@@ -677,7 +678,10 @@ const normalizedDockerConfig = (configuration) => {
     name: configuration.name,
     image: configuration.image,
     ports,
-    environment: Object.fromEntries(entries)
+    environment: Object.fromEntries(entries),
+    extraArgs: Array.isArray(configuration.extraArgs)
+      ? configuration.extraArgs.filter((value) => typeof value === "string" && value.length <= 512).slice(0, 16)
+      : []
   };
 };
 const dockerArguments = (configuration, includeInit = false) => {
@@ -685,7 +689,8 @@ const dockerArguments = (configuration, includeInit = false) => {
   const portArgs = config.ports.map((port) => `-p ${shellQuote(port)}`).join(" ");
   const environmentArgs = Object.entries(config.environment)
     .map(([key, value]) => `-e ${shellQuote(`${key}=${value}`)}`).join(" ");
-  return `run -d ${includeInit ? "--init " : ""}--name ${shellQuote(config.name)} ${portArgs} ${environmentArgs} ${shellQuote(config.image)}`.replace(/\s+/g, " ").trim();
+  const extraArgs = config.extraArgs.map(shellQuote).join(" ");
+  return `run -d ${includeInit ? "--init " : ""}--name ${shellQuote(config.name)} ${portArgs} ${environmentArgs} ${extraArgs} ${shellQuote(config.image)}`.replace(/\s+/g, " ").trim();
 };
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const executeDockerAttempts = async (commands, timeoutMs = 30000, allowScriptInitialization = true) => {
@@ -734,9 +739,21 @@ const offsetDockerPorts = (configuration, offset) => ({
   })
 });
 const dockerPresets = Object.freeze({
-  ollama: { name: "ollama", image: "ollama/ollama:latest", ports: ["11434:11434"], environment: {} },
-  postgres: { name: "postgres", image: "postgres:16-alpine", ports: ["5432:5432"], environment: { POSTGRES_USER: "shipai", POSTGRES_PASSWORD: "change-me", POSTGRES_DB: "shipai" } },
-  redis: { name: "redis", image: "redis:7-alpine", ports: ["6379:6379"], environment: {} }
+  openwebui: { name: "open-webui", image: "ghcr.io/open-webui/open-webui:main", category: "AI & LLM", ports: ["3000:8080"], environment: {}, extraArgs: ["--add-host", "host.docker.internal:host-gateway"], protocol: "http", instructions: "Vytvoř si první admin účet. Ollamu nastav na http://host.docker.internal:11434." },
+  librechat: { name: "librechat", image: "linuxserver/librechat:latest", category: "AI & LLM", ports: ["3080:3080"], environment: {}, extraArgs: ["--add-host", "host.docker.internal:host-gateway"], protocol: "http", instructions: "Dokonči úvodní konfiguraci a jako Ollama endpoint použij http://host.docker.internal:11434." },
+  anythingllm: { name: "anythingllm", image: "mintplexlabs/anythingllm:latest", category: "AI & LLM", ports: ["3001:3001"], environment: { STORAGE_DIR: "/app/server/storage" }, extraArgs: ["--add-host", "host.docker.internal:host-gateway"], protocol: "http", instructions: "Vytvoř účet, vyber Ollama a nastav endpoint http://host.docker.internal:11434; potom nahraj PDF do workspace." },
+  flowise: { name: "flowise", image: "flowiseai/flowise:latest", category: "AI & LLM", ports: ["3002:3000"], environment: {}, extraArgs: ["--add-host", "host.docker.internal:host-gateway"], protocol: "http", instructions: "Vytvoř první flow a v nastavení modelu zvol Ollama na http://host.docker.internal:11434." },
+  qdrant: { name: "qdrant", image: "qdrant/qdrant:latest", category: "AI & LLM", ports: ["6333:6333"], environment: {}, protocol: "http", instructions: "Qdrant je připraven bez účtu. API a dashboard otevřeš na uvedené URL; kolekce vytvoř přes REST API." },
+  nextcloud: { name: "nextcloud", image: "nextcloud:latest", category: "Self-Hosted & Cloud", ports: ["8080:80"], environment: {}, protocol: "http", instructions: "Vytvoř administrátora a nastav databázi. Pro test lze použít SQLite, pro produkci doporučujeme PostgreSQL." },
+  portainer: { name: "portainer", image: "portainer/portainer-ce:latest", category: "Self-Hosted & Cloud", ports: ["9000:9000"], environment: {}, extraArgs: ["-v", "/var/run/docker.sock:/var/run/docker.sock"], protocol: "http", instructions: "Vytvoř první admin účet a zvol lokální Docker environment." },
+  uptimekuma: { name: "uptime-kuma", image: "louislam/uptime-kuma:latest", category: "Self-Hosted & Cloud", ports: ["3003:3001"], environment: {}, protocol: "http", instructions: "Vytvoř admin účet a přidej URL služeb, které chceš monitorovat." },
+  vaultwarden: { name: "vaultwarden", image: "vaultwarden/server:latest", category: "Self-Hosted & Cloud", ports: ["8081:80"], environment: {}, protocol: "http", instructions: "Vytvoř účet až po nastavení HTTPS reverse proxy; bez HTTPS nepoužívej skutečná hesla." },
+  n8n: { name: "n8n", image: "n8nio/n8n:latest", category: "Self-Hosted & Cloud", ports: ["5678:5678"], environment: {}, protocol: "http", instructions: "Vytvoř účet vlastníka a nastav první workflow. Pro veřejný provoz použij HTTPS reverse proxy." },
+  postgres: { name: "postgres", image: "postgres:16-alpine", category: "Databases & Dev", ports: ["5432:5432"], environment: { POSTGRES_USER: "shipai", POSTGRES_PASSWORD: "change-me", POSTGRES_DB: "shipai" }, protocol: "postgresql", instructions: "Připojení: postgresql://shipai:change-me@SERVER:PORT/shipai. Heslo change-me ihned změň." },
+  redis: { name: "redis", image: "redis:7-alpine", category: "Databases & Dev", ports: ["6379:6379"], environment: {}, protocol: "redis", instructions: "Připojení: redis://SERVER:PORT. Redis je bez autentizace; nevystavuj port do veřejné sítě." },
+  mongodb: { name: "mongodb", image: "mongo:7", category: "Databases & Dev", ports: ["27017:27017"], environment: {}, protocol: "mongodb", instructions: "Připojení: mongodb://SERVER:PORT. Pro produkci nastav autentizaci a síťová omezení." },
+  adminer: { name: "adminer", image: "adminer:latest", category: "Databases & Dev", ports: ["8082:8080"], environment: {}, protocol: "http", instructions: "Server zadej jako SERVER:5432 (PostgreSQL) nebo SERVER:27017 (MongoDB podle použitého driveru)." },
+  gitea: { name: "gitea", image: "gitea/gitea:latest", category: "Databases & Dev", ports: ["3004:3000"], environment: {}, protocol: "http", instructions: "Vytvoř první účet a dokonči instalaci. Pro databázi můžeš začít se SQLite." }
 });
 const removeStoppedContainer = async (name) => {
   try {
@@ -767,8 +784,9 @@ const createDockerContainer = async (configuration, cleanStopped = false) => {
     result = await executeDockerAttempts([dockerCommand(fallback), `sudo -n docker ${fallback}`], 60000, false);
   }
   if (!result.success && config.ports.length && hasPortConflict(result)) {
-    for (const offset of [1, 2, 3]) {
+    for (let offset = 1; offset <= 100; offset += 1) {
       const alternative = offsetDockerPorts(config, offset);
+      if (alternative.ports.some((port) => Number.parseInt(port, 10) > 65535)) break;
       const alternativeCommand = dockerArguments(alternative, true);
       result = await executeDockerAttempts([dockerCommand(alternativeCommand), `sudo -n docker ${alternativeCommand}`], 60000, false);
       if (result.success) {
@@ -778,7 +796,16 @@ const createDockerContainer = async (configuration, cleanStopped = false) => {
     }
   }
   if (result.success) remoteStatusCache.expiresAt = 0;
-  return { ...result, name: config.name, usedPorts: usedConfiguration.ports };
+  const host = sshConnection?.host || "";
+  const hostPort = Number.parseInt(usedConfiguration.ports[0], 10);
+  const preset = Object.values(dockerPresets).find((item) => item.name === config.name);
+  return {
+    ...result,
+    name: config.name,
+    usedPorts: usedConfiguration.ports,
+    url: preset && host && preset.protocol === "http" ? `http://${host}:${hostPort}` : null,
+    access: preset ? { protocol: preset.protocol, instructions: preset.instructions } : null
+  };
 };
 const ollamaApiCommand = (method = "GET", body = "", path = "ps") => {
   const bodyArgument = body ? ` -H 'Content-Type: application/json' --data ${shellQuote(body)}` : "";

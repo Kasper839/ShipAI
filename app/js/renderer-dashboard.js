@@ -61,9 +61,67 @@
   const showError = (error) => { elements.error.textContent = error.message || "Unable to retrieve server telemetry."; elements.error.hidden = false; };
   const showToast = (message) => { const toast = $("dashboard-toast"); toast.textContent = message; toast.hidden = false; window.setTimeout(() => { toast.hidden = true; }, 2600); };
   const dockerPresets = {
-    ollama: { name: "ollama", image: "ollama/ollama:latest", ports: "11434:11434", environment: "" },
-    postgres: { name: "postgres", image: "postgres:16-alpine", ports: "5432:5432", environment: "POSTGRES_USER=shipai\nPOSTGRES_PASSWORD=change-me\nPOSTGRES_DB=shipai" },
-    redis: { name: "redis", image: "redis:7-alpine", ports: "6379:6379", environment: "" },
+    openwebui: { name: "Open WebUI", category: "AI & LLM", ports: "3000:8080", description: "ChatGPT rozhraní pro Ollamu." },
+    librechat: { name: "LibreChat", category: "AI & LLM", ports: "3080:3080", description: "Univerzální chatové rozhraní." },
+    anythingllm: { name: "AnythingLLM", category: "AI & LLM", ports: "3001:3001", description: "Chat s vlastními PDF dokumenty." },
+    flowise: { name: "Flowise", category: "AI & LLM", ports: "3002:3000", description: "Vizuální tvorba AI agentů." },
+    qdrant: { name: "Qdrant", category: "AI & LLM", ports: "6333:6333", description: "Vektorová databáze." },
+    nextcloud: { name: "Nextcloud", category: "Self-Hosted & Cloud", ports: "8080:80", description: "Vlastní cloud a úložiště." },
+    portainer: { name: "Portainer", category: "Self-Hosted & Cloud", ports: "9000:9000", description: "Pokročilá správa Dockeru." },
+    uptimekuma: { name: "Uptime Kuma", category: "Self-Hosted & Cloud", ports: "3003:3001", description: "Hlídání dostupnosti serverů a webů." },
+    vaultwarden: { name: "Vaultwarden", category: "Self-Hosted & Cloud", ports: "8081:80", description: "Správce hesel kompatibilní s Bitwarden." },
+    n8n: { name: "n8n", category: "Self-Hosted & Cloud", ports: "5678:5678", description: "Automatizace workflow." },
+    postgres: { name: "PostgreSQL", category: "Databases & Dev", ports: "5432:5432", description: "Relační databáze." },
+    redis: { name: "Redis", category: "Databases & Dev", ports: "6379:6379", description: "Rychlá cache a fronta." },
+    mongodb: { name: "MongoDB", category: "Databases & Dev", ports: "27017:27017", description: "Dokumentová databáze." },
+    adminer: { name: "Adminer", category: "Databases & Dev", ports: "8082:8080", description: "Webová správa databází." },
+    gitea: { name: "Gitea", category: "Databases & Dev", ports: "3004:3000", description: "Vlastní Git hosting." }
+  };
+  const dockerLaunches = new Map();
+  const serviceKey = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const dockerProtocols = { postgres: "postgresql", redis: "redis", mongodb: "mongodb" };
+  const dockerInstructions = {
+    openwebui: "Vytvoř první admin účet a nastav Ollamu na http://host.docker.internal:11434.",
+    librechat: "Dokonči úvodní konfiguraci a jako Ollama endpoint použij http://host.docker.internal:11434.",
+    anythingllm: "Vytvoř účet, vyber Ollama na http://host.docker.internal:11434 a nahraj PDF do workspace.",
+    flowise: "Vytvoř první flow a jako Ollama endpoint použij http://host.docker.internal:11434.",
+    qdrant: "Vytvoř kolekci přes REST API; Qdrant je připraven bez účtu.",
+    nextcloud: "Vytvoř administrátora a dokonči úvodní nastavení databáze.",
+    portainer: "Vytvoř první admin účet a zvol lokální Docker environment.",
+    uptimekuma: "Vytvoř admin účet a přidej URL služeb, které chceš monitorovat.",
+    vaultwarden: "Vytvoř účet až po nastavení HTTPS reverse proxy; bez HTTPS nepoužívej skutečná hesla.",
+    n8n: "Vytvoř účet vlastníka a nastav první workflow.",
+    postgres: "Připojení: postgresql://shipai:change-me@SERVER:PORT/shipai. Heslo ihned změň.",
+    redis: "Připojení: redis://SERVER:PORT. Redis je bez autentizace; nevystavuj ho veřejně.",
+    mongodb: "Připojení: mongodb://SERVER:PORT. Pro produkci nastav autentizaci.",
+    adminer: "Přihlas se údaji databáze a jako server zadej SERVER:5432.",
+    gitea: "Vytvoř první účet a dokonči instalaci; pro databázi lze začít se SQLite."
+  };
+  const renderDockerPresets = () => {
+    const target = $("docker-presets");
+    if (!target) return;
+    target.replaceChildren();
+    const groups = new Map();
+    Object.entries(dockerPresets).forEach(([id, preset]) => {
+      if (!groups.has(preset.category)) groups.set(preset.category, []);
+      groups.get(preset.category).push([id, preset]);
+    });
+    groups.forEach((presets, category) => {
+      const section = document.createElement("section");
+      section.className = "docker-preset-category";
+      section.innerHTML = `<h3>${escapeHtml(category)}</h3><div class="docker-preset-grid"></div>`;
+      const grid = section.querySelector(".docker-preset-grid");
+      presets.forEach(([id, preset]) => {
+        const card = document.createElement("article");
+        card.className = "docker-preset-card";
+        card.innerHTML = `<div><h4></h4><p class="docker-preset-purpose"></p><p class="docker-preset-connect"></p></div><button class="button button-primary button-small" type="button" data-docker-preset="${id}">Spustit</button>`;
+        card.querySelector("h4").textContent = preset.name;
+        card.querySelector(".docker-preset-purpose").textContent = preset.description;
+        card.querySelector(".docker-preset-connect").textContent = `Port: ${preset.ports.split(":")[0]}`;
+        grid.append(card);
+      });
+      target.append(section);
+    });
   };
   const renderDocker = (telemetry) => {
     const containers = Array.isArray(telemetry?.containers) ? telemetry.containers : [];
@@ -83,12 +141,24 @@
       const running = String(container.state || "").toLowerCase() === "running";
       const card = document.createElement("article");
       card.className = "container-card";
-      card.innerHTML = `<div class="container-card-heading"><div><strong class="service-name"></strong><span class="service-id"></span></div><span class="container-state ${running ? "is-running" : ""}"><span class="status-dot"></span>${running ? "Running" : "Stopped"}</span></div><p class="container-image"></p><p class="container-status"></p><div class="container-card-actions"><button class="button button-small button-secondary" type="button" data-docker-action="start">Start</button><button class="button button-small button-secondary" type="button" data-docker-action="stop">Stop</button><button class="button button-small button-secondary" type="button" data-docker-action="restart">Restart</button><button class="button button-small button-quiet" type="button" data-docker-action="logs">Logs</button></div>`;
+      const launch = dockerLaunches.get(serviceKey(name));
+      const host = telemetry.serverHost || "";
+      const mappedPort = launch?.usedPorts?.[0]?.split(":")[0] || String(container.ports || "").match(/(?:^|, )[^:]+:(\d+)->/)?.[1] || "";
+      const preset = Object.values(dockerPresets).find((item) => serviceKey(item.name) === serviceKey(name));
+      const protocol = dockerProtocols[Object.keys(dockerPresets).find((key) => dockerPresets[key] === preset)] || "http";
+      const url = launch?.url || (host && mappedPort && preset ? `${protocol}://${host}:${mappedPort}` : "");
+      card.innerHTML = `<div class="container-card-heading"><div><strong class="service-name"></strong><span class="service-id"></span></div><span class="container-state ${running ? "is-running" : ""}"><span class="status-dot"></span>${running ? "Running" : "Stopped"}</span></div><p class="container-image"></p><p class="container-status"></p>${url ? `<div class="container-next"><strong>Co dělat dál</strong><a class="container-url" target="_blank" rel="noreferrer"></a><button class="button button-small button-quiet" type="button" data-copy-url>Copy URL</button><p class="container-instructions"></p></div>` : ""}<div class="container-card-actions"><button class="button button-small button-secondary" type="button" data-docker-action="start">Start</button><button class="button button-small button-secondary" type="button" data-docker-action="stop">Stop</button><button class="button button-small button-secondary" type="button" data-docker-action="restart">Restart</button><button class="button button-small button-quiet" type="button" data-docker-action="logs">Logs</button></div>`;
       card.dataset.containerName = name;
       card.querySelector(".service-name").textContent = name;
       card.querySelector(".service-id").textContent = String(container.id || "").slice(0, 12);
       card.querySelector(".container-image").textContent = String(container.image || "Image unavailable");
       card.querySelector(".container-status").textContent = String(container.status || "No status details");
+      if (url) {
+        card.querySelector(".container-url").textContent = url;
+        card.querySelector(".container-url").href = url;
+        const presetId = Object.keys(dockerPresets).find((key) => dockerPresets[key] === preset);
+        card.querySelector(".container-instructions").textContent = launch?.access?.instructions || dockerInstructions[presetId] || "Otevři službu a dokonči její úvodní nastavení.";
+      }
       card.querySelector('[data-docker-action="start"]').disabled = running;
       card.querySelector('[data-docker-action="stop"]').disabled = !running;
       card.querySelector('[data-docker-action="restart"]').disabled = !running;
@@ -133,6 +203,7 @@
     try {
       const result = await window.api.launchDockerPreset(preset);
       if (!result?.success) throw new Error(result?.error || "Docker preset could not be started.");
+      dockerLaunches.set(serviceKey(result.name || dockerPresets[preset].name), result);
       const portNotice = result.usedPorts?.join(", ") !== dockerPresets[preset].ports
         ? ` Available ports: ${result.usedPorts.join(", ")}.`
         : "";
@@ -623,11 +694,19 @@
   };
   window.api.onOllamaPullProgress(onPullProgress); window.api.onDeploymentLog((entry) => { updateTaskLog(entry); }); window.api.onInstallProgress((entry) => { updateTaskLog(entry); }); window.api.onModelProgress((payload) => { const wasCancelled = cancelledDownloadJobs.has(payload.jobId); if (!wasCancelled) updateModelProgress(payload); updateTaskProgress(payload); if (payload.state === "complete" || payload.state === "error" || payload.state === "cancelled") { const task = [...taskTabs.values()].find((item) => item.jobId === payload.jobId); if (payload.jobId === activeDownloadJobId) activeDownloadJobId = ""; if ((payload.state === "error" || payload.state === "cancelled") && task) taskTabs.delete(task.taskId); if (task && payload.state === "complete" && !wasCancelled) openTaskChat(task); if (payload.state === "error" && !wasCancelled && payload.message !== "Model download cancelled.") showError(new Error(payload.message || "Model download failed.")); if (payload.state === "complete" && !wasCancelled) void refreshInstalledModels(); if (wasCancelled) cancelledDownloadJobs.delete(payload.jobId); } });
   elements.containerGrid?.addEventListener("click", (event) => {
+    const copyButton = event.target.closest("[data-copy-url]");
+    if (copyButton) {
+      const url = copyButton.parentElement?.querySelector(".container-url")?.textContent;
+      if (url) navigator.clipboard.writeText(url).then(() => showToast("URL copied.")).catch(showError);
+      return;
+    }
     const button = event.target.closest("[data-docker-action]");
     if (button) void dockerAction(button);
   });
-  document.querySelectorAll("[data-docker-preset]").forEach((button) => {
-    button.addEventListener("click", () => void launchDockerPreset(button));
+  renderDockerPresets();
+  $("docker-presets")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-docker-preset]");
+    if (button) void launchDockerPreset(button);
   });
   window.api.onConnectionState((payload) => {
     const reconnecting = payload?.state === "reconnecting";
